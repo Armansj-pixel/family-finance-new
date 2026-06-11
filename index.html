@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="./manifest.json"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#080C14"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Famili Finance"/>
+<link rel="apple-touch-icon" href="./icon-192.png"/>
+<title>Family Finance</title>
+<style>
+:root{
+  --bg:#080C14; --surface:#0E1420; --card:#131B2A; --border:#1E2D45;
+  --teal:#2DD4BF; --tealDim:#134E4A; --gold:#F59E0B; --goldDim:#451A03;
+  --rose:#FB7185; --violet:#A78BFA; --violetDim:#2E1065;
+  --green:#4ADE80; --slate3:#94A3B8; --slate5:#475569; --white:#F1F5F9;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);color:var(--white);font-family:Inter,system-ui,sans-serif;}
+body{max-width:480px;margin:0 auto;min-height:100vh;position:relative;padding-bottom:90px;}
+input,select{width:100%;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;color:var(--white);font-size:14px;outline:none;font-family:inherit;}
+select option{background:var(--card);}
+button{font-family:inherit;cursor:pointer;}
+.hidden{display:none !important;}
+.label{font-size:11px;color:var(--slate3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px;}
+.field{margin-bottom:14px;}
+.btn{width:100%;padding:13px 0;border:none;border-radius:14px;font-weight:700;font-size:15px;cursor:pointer;}
+.btn-primary{background:linear-gradient(135deg,var(--teal),#0D9488);color:var(--bg);}
+.tabbtn{flex:1;padding:8px 0;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:transparent;color:var(--slate3);}
+.tabbtn.active{background:var(--teal);color:var(--bg);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px;}
+.bar{height:5px;background:var(--border);border-radius:99px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:99px;transition:width .6s;}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:999;background:var(--card);border:1px solid var(--teal);color:var(--white);border-radius:12px;padding:10px 18px;font-size:13px;font-weight:600;max-width:320px;text-align:center;}
+.toast.error{border-color:var(--rose);}
+.toast.info{border-color:var(--gold);}
+.fab{position:fixed;bottom:74px;right:calc(50% - 228px);width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#0D9488);border:none;color:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 22px rgba(45,212,191,.4);z-index:50;font-size:24px;}
+.bottomnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(8,12,20,.97);backdrop-filter:blur(16px);border-top:1px solid var(--border);z-index:40;display:flex;justify-content:space-around;padding:8px 0 10px;}
+.navbtn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 8px;border-radius:12px;background:none;border:none;cursor:pointer;color:var(--slate5);font-size:9px;font-weight:700;}
+.navbtn.active{color:var(--teal);}
+.navbtn svg{width:20px;height:20px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
+.modal{background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.closebtn{background:var(--card);border:none;border-radius:8px;padding:6px;cursor:pointer;color:var(--slate3);display:flex;}
+.chip{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:var(--card);color:var(--slate3);white-space:nowrap;}
+.chip.active{background:var(--violetDim);color:var(--violet);}
+.cat-btn{padding:8px 4px;border-radius:10px;border:1px solid var(--border);background:var(--card);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.cat-btn.active{border-color:var(--accent,var(--teal));}
+.txrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border);}
+.icon-circle{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--slate3);font-size:14px;z-index:999;}
+::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+
+<div id="loading">Memuat...</div>
+<div id="login-screen" class="hidden"></div>
+<div id="app-screen" class="hidden"></div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+let STATE = null; 
+let TAB = "dashboard";
+
+const fmt = (n) => "Rp" + Math.round(n||0).toLocaleString("id-ID");
+const fmtK = (n) => { n = n||0; const a = Math.abs(n), s = n<0?"-":""; if(a>=1e9) return s+(a/1e9).toFixed(1)+"M"; if(a>=1e6) return s+(a/1e6).toFixed(1)+"jt"; if(a>=1e3) return s+(a/1e3).toFixed(0)+"rb"; return s+a; };
+const todayStr = () => new Date().toISOString().split("T")[0];
+const monthStr = (d=new Date()) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+const pct = (a,b) => b ? Math.min(Math.round((a/b)*100),999) : 0;
+const uid = () => Math.random().toString(36).slice(2,9);
+const esc = (s) => String(s==null?"":s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function showToast(msg, type="success"){
+  const root = document.getElementById("toast-root"); const el = document.createElement("div");
+  el.className = "toast " + (type!=="success"?type:""); el.textContent = msg; root.appendChild(el);
+  setTimeout(()=>el.remove(), 2600);
+}
+function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+function openModal(html){ document.getElementById("modal-root").innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>'; }
+
+// ---- GANTI URL INI DENGAN URL DEPLOYMENT APPS SCRIPT BARU KAMU ----
+const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+function call(fnName, ...args){
+  return fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: fnName, args }) })
+    .then(r => r.json()).then(data => { if (data && data.error) throw new Error(data.error); return data; });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const token = localStorage.getItem("ff_token");
+  if(!token){ showLogin(); return; }
+  call("getAppData", token).then(data => { STATE = data; renderApp(); })
+    .catch(() => { localStorage.removeItem("ff_token"); showLogin(); });
+});
+
+function setStateAndRender(data){ STATE = data; localStorage.setItem("ff_token", data.token); renderApp(); }
+
+let authMode = "login";
+function showLogin(){ document.getElementById("loading").classList.add("hidden"); document.getElementById("app-screen").classList.add("hidden"); document.getElementById("login-screen").classList.remove("hidden"); renderLogin(); }
+
+function renderLogin(){
+  const el = document.getElementById("login-screen");
+  el.innerHTML = `
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+      <div style="text-align:center;margin-bottom:32px;"><div style="font-size:48px;margin-bottom:10px;">💰</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-0.03em;">Famili Finance</h1><p style="color:var(--slate3);font-size:13px;margin-top:6px;">Kelola keuangan keluarga bersama</p></div>
+      <div style="width:100%;max-width:380px;background:var(--surface);border-radius:24px;padding:28px;border:1px solid var(--border);">
+        <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:22px;">
+          <button class="tabbtn ${authMode==='login'?'active':''}" onclick="authMode='login';renderLogin()">Masuk</button><button class="tabbtn ${authMode==='register'?'active':''}" onclick="authMode='register';renderLogin()">Daftar</button>
+        </div>
+        <div id="auth-form"></div><div id="auth-err" style="color:var(--rose);font-size:13px;margin-top:8px;"></div>
+      </div>
+    </div>`;
+  renderAuthForm();
+}
+
+function renderAuthForm(){
+  const formEl = document.getElementById("auth-form");
+  if(authMode==="login"){
+    formEl.innerHTML = `<div class="field"><span class="label">Email</span><input id="li-email" type="email" placeholder="email@kamu.com"/></div><div class="field"><span class="label">Password</span><input id="li-pass" type="password" placeholder="••••••••"/></div><button class="btn btn-primary" id="li-btn" onclick="doLogin()">Masuk</button>`;
+  }else{
+    formEl.innerHTML = `<div class="field"><span class="label">Nama Lengkap</span><input id="re-name" placeholder="Nama kamu"/></div><div class="field"><span class="label">Peran</span><div style="display:flex;gap:8px;"><button type="button" class="role-btn active" data-role="Suami" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--teal);background:var(--tealDim);color:var(--teal);font-weight:600;font-size:12px;">👨 Suami</button><button type="button" class="role-btn" data-role="Istri" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👩 Istri</button></div></div><div class="field"><span class="label">Email</span><input id="re-email" type="email" placeholder="email@kamu.com"/></div><div class="field"><span class="label">Password</span><input id="re-pass" type="password" placeholder="min 6 karakter"/></div><div class="field"><span class="label">Kode Keluarga</span><input id="re-code" placeholder="Kosongkan jika baru"/></div><button class="btn btn-primary" id="re-btn" onclick="doRegister()">Daftar & Masuk</button>`;
+  }
+}
+function selectRole(btn){ document.querySelectorAll(".role-btn").forEach(b=>{b.classList.remove("active");b.style.border="1px solid var(--border)"; b.style.background="var(--card)"; b.style.color="var(--slate3)";}); btn.classList.add("active"); btn.style.border="1px solid var(--teal)"; btn.style.background="var(--tealDim)"; btn.style.color="var(--teal)"; }
+function doLogin(){ const email=document.getElementById("li-email").value.trim(), pass=document.getElementById("li-pass").value, err=document.getElementById("auth-err"), btn=document.getElementById("li-btn"); err.textContent=""; btn.textContent="Memproses..."; btn.disabled=true; call("login", {email, password: pass}).then(data => { setStateAndRender(data); showToast("Selamat datang! 💰"); }).catch(e => { err.textContent = e.message; btn.textContent="Masuk"; btn.disabled=false; }); }
+function doRegister(){ const name=document.getElementById("re-name").value.trim(), role=(document.querySelector(".role-btn.active")||{}).dataset?.role || "Suami", email=document.getElementById("re-email").value.trim(), pass=document.getElementById("re-pass").value, code=document.getElementById("re-code").value.trim(), err=document.getElementById("auth-err"), btn=document.getElementById("re-btn"); err.textContent=""; if(!name||!email||pass.length<6){ err.textContent="Lengkapi form"; return; } btn.textContent="Memproses..."; btn.disabled=true; call("register", {name, role, email, password: pass, familyCode: code}).then(data => { setStateAndRender(data); showToast("Pendaftaran berhasil! 💰"); }).catch(e => { err.textContent = e.message; btn.textContent="Daftar & Masuk"; btn.disabled=false; }); }
+function doLogout(){ call("logout", STATE.token).finally(()=>{ localStorage.removeItem("ff_token"); STATE=null; document.getElementById("app-screen").classList.add("hidden"); showLogin(); }); }
+
+const ICO = { home:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>', wallet:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>', target:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-4h2v2h-2zm0-10h2v8h-2z"/></svg>', history:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z"/></svg>', chart:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>', plus:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>', close:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>', logout:'<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>', trash:'<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>', swap:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>', };
+
+function renderApp(){
+  document.getElementById("loading").classList.add("hidden"); document.getElementById("login-screen").classList.add("hidden");
+  const root = document.getElementById("app-screen"); root.classList.remove("hidden");
+  const u = STATE.user; let body = "";
+  if(TAB==="dashboard") body = renderDashboard(); else if(TAB==="wallets") body = renderWallets(); else if(TAB==="targets") body = renderTargets(); else if(TAB==="history") body = renderHistory(); else if(TAB==="analyzer") body = renderAnalyzer(); else if(TAB==="settings") body = renderSettings();
+  root.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;position:sticky;top:0;background:var(--bg);z-index:10;">
+      <div style="display:flex;align-items:center;gap:7px;"><span style="font-size:17px;">💰</span><span style="font-size:13px;font-weight:800;letter-spacing:-0.02em;">Famili Finance</span></div>
+      <div style="display:flex;align-items:center;gap:8px;"><button onclick="TAB='settings';renderApp()" style="font-size:11px;background:${u.role==='Suami'?'#1D4ED820':'#BE185D20'};border:1px solid ${u.role==='Suami'?'#3B82F640':'#EC489940'};color:${u.role==='Suami'?'#60A5FA':'#F472B6'};padding:4px 10px;border-radius:20px;font-weight:700;">${u.avatar} ${esc(u.name)}</button><button onclick="doLogout()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px;color:var(--slate3);display:flex;">${ICO.logout}</button></div>
+    </div>
+    ${body}<button class="fab" onclick="openAddTxModal()">${ICO.plus}</button>
+    <div class="bottomnav">${navBtn("dashboard","Dasbor",ICO.home)}${navBtn("wallets","Dompet",ICO.wallet)}${navBtn("targets","Target",ICO.target)}${navBtn("history","Histori",ICO.history)}${navBtn("analyzer","Analisis",ICO.chart)}</div>`;
+}
+function navBtn(id,label,icon){ return `<button class="navbtn ${TAB===id?'active':''}" onclick="TAB='${id}';renderApp()">${icon}<span>${label}</span></button>`; }
+function refreshAndRender(){ call("getAppData", STATE.token).then(d=>{STATE=d; renderApp();}); }
+
+function allCats(){ return STATE.categories; }
+function catById(id){ return STATE.categories.find(c=>c.id===id) || {icon:"💸",label:id,color:"#94A3B8"}; }
+function walletById(id){ return STATE.wallets.find(w=>w.id===id); }
+function userById(id){ return STATE.familyUsers.find(u=>u.id===id); }
+function curMonthTx(){ const m = monthStr(); return STATE.transactions.filter(t=>t.date.indexOf(m)===0); }
+function ringChartSVG(segments, size, stroke, centerHTML){ const r = (size-stroke)/2, circ = 2*Math.PI*r; let offset=0; const total = segments.reduce((a,s)=>a+s.value,0)||1; let circles = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>`; segments.forEach(s=>{ const dash=(s.value/total)*circ; circles += `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}" stroke-dasharray="${dash-1.5} ${circ-dash+1.5}" stroke-dashoffset="${-offset}" stroke-linecap="round"/>`; offset+=dash; }); return `<div style="position:relative;width:${size}px;height:${size}px;"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">${circles}</svg>${centerHTML?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;">${centerHTML}</div>`:""}</div>`; }
+
+function txRowHTML(tx){
+  const cat = tx.type==="transfer" ? {icon:"↔️",color:"#A78BFA",label:"Transfer"} : catById(tx.category); const user = userById(tx.userId); const wallet = walletById(tx.walletId); const toWallet = walletById(tx.toWalletId); const isIncome = tx.type==="income", isTransfer = tx.type==="transfer"; const canDelete = tx.userId === STATE.user.id;
+  return `<div class="txrow"><div class="icon-circle" style="background:${cat.color}22;">${isTransfer?"↔️":cat.icon}</div><div style="flex:1;min-width:0;"><p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${esc(tx.keterangan)}</p><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:10px;color:var(--slate5);">${tx.date}</span>${wallet?`<span style="font-size:10px;color:var(--slate5);">·${wallet.icon}${isTransfer&&toWallet?'→'+toWallet.icon:''}</span>`:""}${user?`<span style="font-size:10px;background:var(--card);padding:1px 5px;border-radius:20px;color:var(--slate3);">${user.avatar}</span>`:""}${isTransfer?`<span style="font-size:10px;background:var(--violetDim);padding:1px 6px;border-radius:20px;color:var(--violet);">transfer</span>`:""}${tx.receiptUrl?`<a href="${tx.receiptUrl}" target="_blank" style="font-size:10px;color:var(--teal);text-decoration:underline;">[Lihat Struk]</a>`:""}</div></div><div style="text-align:right;flex-shrink:0;"><p style="font-size:14px;font-weight:700;color:${isTransfer?'var(--violet)':isIncome?'var(--green)':'var(--rose)'};">${isTransfer?'⇄':isIncome?'+':'-'}${fmtK(tx.nominal)}</p>${canDelete?`<button onclick="deleteTx('${tx.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0;font-size:11px;margin-top:1px;">hapus</button>`:""}</div></div>`;
+}
+
+function renderDashboard(){
+  const u = STATE.user, cur = monthStr(), myTx = curMonthTx();
+  const totalIncome = myTx.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.nominal),0);
+  const totalExpense = myTx.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.nominal),0);
+  const totalBalance = STATE.wallets.reduce((a,w)=>a+Number(w.balance),0);
+  const cashflow = totalIncome - totalExpense;
+  const expByCat = {}; myTx.filter(t=>t.type==="expense").forEach(t=>{ expByCat[t.category]=(expByCat[t.category]||0)+Number(t.nominal); });
+  const ringSegs = Object.entries(expByCat).slice(0,7).map(([id,val])=>{ const c=catById(id); return {value:val,color:c.color,label:c.label}; });
+  const spendByUser = {}; myTx.filter(t=>t.type==="expense").forEach(t=>{ spendByUser[t.userId]=(spendByUser[t.userId]||0)+Number(t.nominal); });
