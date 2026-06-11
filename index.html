@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Famili Finance"/>
 <link rel="apple-touch-icon" href="./icon-192.png"/>
-<title>Family Finance</title>
+<title>Famili Finance</title>
 <style>
 :root{
   --bg:#080C14; --surface:#0E1420; --card:#131B2A; --border:#1E2D45;
@@ -64,11 +64,20 @@ button{font-family:inherit;cursor:pointer;}
 <div id="toast-root"></div>
 
 <script>
-let STATE = null; 
+// ============================================================
+// STATE & UTILS
+// ============================================================
+let STATE = null; // { token, user, familyCode, familyUsers, wallets, categories, targets, budgets, transactions }
 let TAB = "dashboard";
 
 const fmt = (n) => "Rp" + Math.round(n||0).toLocaleString("id-ID");
-const fmtK = (n) => { n = n||0; const a = Math.abs(n), s = n<0?"-":""; if(a>=1e9) return s+(a/1e9).toFixed(1)+"M"; if(a>=1e6) return s+(a/1e6).toFixed(1)+"jt"; if(a>=1e3) return s+(a/1e3).toFixed(0)+"rb"; return s+a; };
+const fmtK = (n) => {
+  n = n||0; const a = Math.abs(n), s = n<0?"-":"";
+  if(a>=1e9) return s+(a/1e9).toFixed(1)+"M";
+  if(a>=1e6) return s+(a/1e6).toFixed(1)+"jt";
+  if(a>=1e3) return s+(a/1e3).toFixed(0)+"rb";
+  return s+a;
+};
 const todayStr = () => new Date().toISOString().split("T")[0];
 const monthStr = (d=new Date()) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 const pct = (a,b) => b ? Math.min(Math.round((a/b)*100),999) : 0;
@@ -76,21 +85,35 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const esc = (s) => String(s==null?"":s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function showToast(msg, type="success"){
-  const root = document.getElementById("toast-root"); const el = document.createElement("div");
-  el.className = "toast " + (type!=="success"?type:""); el.textContent = msg; root.appendChild(el);
+  const root = document.getElementById("toast-root");
+  const el = document.createElement("div");
+  el.className = "toast " + (type!=="success"?type:"");
+  el.textContent = msg;
+  root.appendChild(el);
   setTimeout(()=>el.remove(), 2600);
 }
 function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
-function openModal(html){ document.getElementById("modal-root").innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>'; }
+function openModal(html){ document.getElementById("modal-root").innerHTML =
+  '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>'; }
 
-// ---- GANTI URL INI DENGAN URL DEPLOYMENT APPS SCRIPT BARU KAMU ----
-const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const API_URL = "https://script.google.com/macros/s/AKfycbxCpbsMQCg44UiCmYO_1YSagHBMLqOM6SCZt07WFwdlfMTX54uroVI1ZmsLsS_Ug7Ha/exec";
 
 function call(fnName, ...args){
-  return fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: fnName, args }) })
-    .then(r => r.json()).then(data => { if (data && data.error) throw new Error(data.error); return data; });
+  return fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight
+    body: JSON.stringify({ fn: fnName, args }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.error) throw new Error(data.error);
+      return data;
+    });
 }
 
+// ============================================================
+// SESSION BOOTSTRAP
+// ============================================================
 window.addEventListener("DOMContentLoaded", () => {
   const token = localStorage.getItem("ff_token");
   if(!token){ showLogin(); return; }
@@ -98,22 +121,43 @@ window.addEventListener("DOMContentLoaded", () => {
     .catch(() => { localStorage.removeItem("ff_token"); showLogin(); });
 });
 
-function setStateAndRender(data){ STATE = data; localStorage.setItem("ff_token", data.token); renderApp(); }
+function setStateAndRender(data){
+  STATE = data;
+  localStorage.setItem("ff_token", data.token);
+  renderApp();
+}
 
+// ============================================================
+// LOGIN / REGISTER SCREEN
+// ============================================================
 let authMode = "login";
-function showLogin(){ document.getElementById("loading").classList.add("hidden"); document.getElementById("app-screen").classList.add("hidden"); document.getElementById("login-screen").classList.remove("hidden"); renderLogin(); }
+function showLogin(){
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("app-screen").classList.add("hidden");
+  const el = document.getElementById("login-screen");
+  el.classList.remove("hidden");
+  renderLogin();
+}
 
 function renderLogin(){
   const el = document.getElementById("login-screen");
   el.innerHTML = `
     <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
-      <div style="text-align:center;margin-bottom:32px;"><div style="font-size:48px;margin-bottom:10px;">💰</div><h1 style="font-size:26px;font-weight:800;letter-spacing:-0.03em;">Famili Finance</h1><p style="color:var(--slate3);font-size:13px;margin-top:6px;">Kelola keuangan keluarga bersama</p></div>
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="font-size:48px;margin-bottom:10px;">💰</div>
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-0.03em;">Famili Finance</h1>
+        <p style="color:var(--slate3);font-size:13px;margin-top:6px;">Kelola keuangan keluarga bersama, transparan & terencana</p>
+      </div>
       <div style="width:100%;max-width:380px;background:var(--surface);border-radius:24px;padding:28px;border:1px solid var(--border);">
         <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:22px;">
-          <button class="tabbtn ${authMode==='login'?'active':''}" onclick="authMode='login';renderLogin()">Masuk</button><button class="tabbtn ${authMode==='register'?'active':''}" onclick="authMode='register';renderLogin()">Daftar</button>
+          <button class="tabbtn ${authMode==='login'?'active':''}" onclick="authMode='login';renderLogin()">Masuk</button>
+          <button class="tabbtn ${authMode==='register'?'active':''}" onclick="authMode='register';renderLogin()">Daftar</button>
         </div>
-        <div id="auth-form"></div><div id="auth-err" style="color:var(--rose);font-size:13px;margin-top:8px;"></div>
+        <div id="auth-form"></div>
+        <div id="auth-err" style="color:var(--rose);font-size:13px;margin-top:8px;"></div>
+        <div id="auth-info" style="color:var(--teal);font-size:13px;margin-top:8px;"></div>
       </div>
+      <p style="color:var(--slate5);font-size:11px;margin-top:18px;text-align:center;">Data tersimpan aman di Google Sheets keluargamu</p>
     </div>`;
   renderAuthForm();
 }
@@ -121,52 +165,923 @@ function renderLogin(){
 function renderAuthForm(){
   const formEl = document.getElementById("auth-form");
   if(authMode==="login"){
-    formEl.innerHTML = `<div class="field"><span class="label">Email</span><input id="li-email" type="email" placeholder="email@kamu.com"/></div><div class="field"><span class="label">Password</span><input id="li-pass" type="password" placeholder="••••••••"/></div><button class="btn btn-primary" id="li-btn" onclick="doLogin()">Masuk</button>`;
+    formEl.innerHTML = `
+      <div class="field"><span class="label">Email</span><input id="li-email" type="email" placeholder="email@kamu.com"/></div>
+      <div class="field"><span class="label">Password</span><input id="li-pass" type="password" placeholder="••••••••"/></div>
+      <button class="btn btn-primary" id="li-btn" onclick="doLogin()">Masuk</button>`;
   }else{
-    formEl.innerHTML = `<div class="field"><span class="label">Nama Lengkap</span><input id="re-name" placeholder="Nama kamu"/></div><div class="field"><span class="label">Peran</span><div style="display:flex;gap:8px;"><button type="button" class="role-btn active" data-role="Suami" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--teal);background:var(--tealDim);color:var(--teal);font-weight:600;font-size:12px;">👨 Suami</button><button type="button" class="role-btn" data-role="Istri" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👩 Istri</button></div></div><div class="field"><span class="label">Email</span><input id="re-email" type="email" placeholder="email@kamu.com"/></div><div class="field"><span class="label">Password</span><input id="re-pass" type="password" placeholder="min 6 karakter"/></div><div class="field"><span class="label">Kode Keluarga</span><input id="re-code" placeholder="Kosongkan jika baru"/></div><button class="btn btn-primary" id="re-btn" onclick="doRegister()">Daftar & Masuk</button>`;
+    formEl.innerHTML = `
+      <div class="field"><span class="label">Nama Lengkap</span><input id="re-name" placeholder="Nama kamu"/></div>
+      <div class="field"><span class="label">Peran</span>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="role-btn active" data-role="Suami" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--teal);background:var(--tealDim);color:var(--teal);font-weight:600;font-size:12px;">👨 Suami</button>
+          <button type="button" class="role-btn" data-role="Istri" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👩 Istri</button>
+          <button type="button" class="role-btn" data-role="Anggota" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👤 Anggota</button>
+        </div>
+      </div>
+      <div class="field"><span class="label">Email</span><input id="re-email" type="email" placeholder="email@kamu.com"/></div>
+      <div class="field"><span class="label">Password</span><input id="re-pass" type="password" placeholder="min 6 karakter"/></div>
+      <div class="field"><span class="label">Kode Keluarga</span><input id="re-code" placeholder="Kosongkan jika baru (opsional)" style="font-family:monospace;text-transform:uppercase;"/>
+        <p style="font-size:11px;color:var(--slate5);margin-top:4px;">Kosongkan untuk buat keluarga baru, atau isi kode dari pasangan untuk bergabung</p>
+      </div>
+      <button class="btn btn-primary" id="re-btn" onclick="doRegister()">Daftar & Masuk</button>`;
   }
 }
-function selectRole(btn){ document.querySelectorAll(".role-btn").forEach(b=>{b.classList.remove("active");b.style.border="1px solid var(--border)"; b.style.background="var(--card)"; b.style.color="var(--slate3)";}); btn.classList.add("active"); btn.style.border="1px solid var(--teal)"; btn.style.background="var(--tealDim)"; btn.style.color="var(--teal)"; }
-function doLogin(){ const email=document.getElementById("li-email").value.trim(), pass=document.getElementById("li-pass").value, err=document.getElementById("auth-err"), btn=document.getElementById("li-btn"); err.textContent=""; btn.textContent="Memproses..."; btn.disabled=true; call("login", {email, password: pass}).then(data => { setStateAndRender(data); showToast("Selamat datang! 💰"); }).catch(e => { err.textContent = e.message; btn.textContent="Masuk"; btn.disabled=false; }); }
-function doRegister(){ const name=document.getElementById("re-name").value.trim(), role=(document.querySelector(".role-btn.active")||{}).dataset?.role || "Suami", email=document.getElementById("re-email").value.trim(), pass=document.getElementById("re-pass").value, code=document.getElementById("re-code").value.trim(), err=document.getElementById("auth-err"), btn=document.getElementById("re-btn"); err.textContent=""; if(!name||!email||pass.length<6){ err.textContent="Lengkapi form"; return; } btn.textContent="Memproses..."; btn.disabled=true; call("register", {name, role, email, password: pass, familyCode: code}).then(data => { setStateAndRender(data); showToast("Pendaftaran berhasil! 💰"); }).catch(e => { err.textContent = e.message; btn.textContent="Daftar & Masuk"; btn.disabled=false; }); }
-function doLogout(){ call("logout", STATE.token).finally(()=>{ localStorage.removeItem("ff_token"); STATE=null; document.getElementById("app-screen").classList.add("hidden"); showLogin(); }); }
+function selectRole(btn){
+  document.querySelectorAll(".role-btn").forEach(b=>{
+    b.classList.remove("active");
+    b.style.border="1px solid var(--border)"; b.style.background="var(--card)"; b.style.color="var(--slate3)";
+  });
+  btn.classList.add("active");
+  btn.style.border="1px solid var(--teal)"; btn.style.background="var(--tealDim)"; btn.style.color="var(--teal)";
+}
 
-const ICO = { home:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>', wallet:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>', target:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-4h2v2h-2zm0-10h2v8h-2z"/></svg>', history:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z"/></svg>', chart:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>', plus:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>', close:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>', logout:'<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>', trash:'<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>', swap:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>', };
+function doLogin(){
+  const email = document.getElementById("li-email").value.trim();
+  const pass = document.getElementById("li-pass").value;
+  const errEl = document.getElementById("auth-err");
+  const btn = document.getElementById("li-btn");
+  errEl.textContent = ""; btn.textContent = "Memproses..."; btn.disabled = true;
+  call("login", {email, password: pass})
+    .then(data => { setStateAndRender(data); showToast("Selamat datang, "+data.user.name+"! 💰"); })
+    .catch(err => { errEl.textContent = err.message || "Login gagal"; btn.textContent="Masuk"; btn.disabled=false; });
+}
 
+function doRegister(){
+  const name = document.getElementById("re-name").value.trim();
+  const role = (document.querySelector(".role-btn.active")||{}).dataset?.role || "Suami";
+  const email = document.getElementById("re-email").value.trim();
+  const pass = document.getElementById("re-pass").value;
+  const familyCode = document.getElementById("re-code").value.trim();
+  const errEl = document.getElementById("auth-err");
+  const btn = document.getElementById("re-btn");
+  errEl.textContent = "";
+  if(!name || !email || pass.length<6){ errEl.textContent="Lengkapi nama, email, dan password minimal 6 karakter"; return; }
+  btn.textContent="Memproses..."; btn.disabled=true;
+  call("register", {name, role, email, password: pass, familyCode})
+    .then(data => { setStateAndRender(data); showToast("Pendaftaran berhasil! Selamat datang 💰"); })
+    .catch(err => { errEl.textContent = err.message || "Pendaftaran gagal"; btn.textContent="Daftar & Masuk"; btn.disabled=false; });
+}
+
+function doLogout(){
+  call("logout", STATE.token).finally(()=>{
+    localStorage.removeItem("ff_token");
+    STATE = null;
+    document.getElementById("app-screen").classList.add("hidden");
+    showLogin();
+  });
+}
+
+// ============================================================
+// SVG ICONS
+// ============================================================
+const ICO = {
+  home:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
+  target:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-4h2v2h-2zm0-10h2v8h-2z"/></svg>',
+  history:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
+  close:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
+  logout:'<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+  swap:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>',
+};
+
+// ============================================================
+// MAIN APP RENDER
+// ============================================================
 function renderApp(){
-  document.getElementById("loading").classList.add("hidden"); document.getElementById("login-screen").classList.add("hidden");
-  const root = document.getElementById("app-screen"); root.classList.remove("hidden");
-  const u = STATE.user; let body = "";
-  if(TAB==="dashboard") body = renderDashboard(); else if(TAB==="wallets") body = renderWallets(); else if(TAB==="targets") body = renderTargets(); else if(TAB==="history") body = renderHistory(); else if(TAB==="analyzer") body = renderAnalyzer(); else if(TAB==="settings") body = renderSettings();
+  document.getElementById("loading").classList.add("hidden");
+  document.getElementById("login-screen").classList.add("hidden");
+  const root = document.getElementById("app-screen");
+  root.classList.remove("hidden");
+
+  const u = STATE.user;
+  let body = "";
+  if(TAB==="dashboard") body = renderDashboard();
+  else if(TAB==="wallets") body = renderWallets();
+  else if(TAB==="targets") body = renderTargets();
+  else if(TAB==="history") body = renderHistory();
+  else if(TAB==="analyzer") body = renderAnalyzer();
+  else if(TAB==="settings") body = renderSettings();
+
   root.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;position:sticky;top:0;background:var(--bg);z-index:10;">
-      <div style="display:flex;align-items:center;gap:7px;"><span style="font-size:17px;">💰</span><span style="font-size:13px;font-weight:800;letter-spacing:-0.02em;">Famili Finance</span></div>
-      <div style="display:flex;align-items:center;gap:8px;"><button onclick="TAB='settings';renderApp()" style="font-size:11px;background:${u.role==='Suami'?'#1D4ED820':'#BE185D20'};border:1px solid ${u.role==='Suami'?'#3B82F640':'#EC489940'};color:${u.role==='Suami'?'#60A5FA':'#F472B6'};padding:4px 10px;border-radius:20px;font-weight:700;">${u.avatar} ${esc(u.name)}</button><button onclick="doLogout()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px;color:var(--slate3);display:flex;">${ICO.logout}</button></div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-size:17px;">💰</span>
+        <span style="font-size:13px;font-weight:800;letter-spacing:-0.02em;">Famili Finance</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button onclick="TAB='settings';renderApp()" style="font-size:11px;background:${u.role==='Suami'?'#1D4ED820':'#BE185D20'};border:1px solid ${u.role==='Suami'?'#3B82F640':'#EC489940'};color:${u.role==='Suami'?'#60A5FA':'#F472B6'};padding:4px 10px;border-radius:20px;font-weight:700;">${u.avatar} ${esc(u.name)}</button>
+        <button onclick="doLogout()" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px;color:var(--slate3);display:flex;">${ICO.logout}</button>
+      </div>
     </div>
-    ${body}<button class="fab" onclick="openAddTxModal()">${ICO.plus}</button>
-    <div class="bottomnav">${navBtn("dashboard","Dasbor",ICO.home)}${navBtn("wallets","Dompet",ICO.wallet)}${navBtn("targets","Target",ICO.target)}${navBtn("history","Histori",ICO.history)}${navBtn("analyzer","Analisis",ICO.chart)}</div>`;
+    ${body}
+    <button class="fab" onclick="openAddTxModal()">${ICO.plus}</button>
+    <div class="bottomnav">
+      ${navBtn("dashboard","Dasbor",ICO.home)}
+      ${navBtn("wallets","Dompet",ICO.wallet)}
+      ${navBtn("targets","Target",ICO.target)}
+      ${navBtn("history","Histori",ICO.history)}
+      ${navBtn("analyzer","Analisis",ICO.chart)}
+    </div>`;
 }
-function navBtn(id,label,icon){ return `<button class="navbtn ${TAB===id?'active':''}" onclick="TAB='${id}';renderApp()">${icon}<span>${label}</span></button>`; }
+function navBtn(id,label,icon){
+  return `<button class="navbtn ${TAB===id?'active':''}" onclick="TAB='${id}';renderApp()">${icon}<span>${label}</span></button>`;
+}
 function refreshAndRender(){ call("getAppData", STATE.token).then(d=>{STATE=d; renderApp();}); }
 
+// ============================================================
+// HELPERS: categories / wallets / users lookup
+// ============================================================
 function allCats(){ return STATE.categories; }
 function catById(id){ return STATE.categories.find(c=>c.id===id) || {icon:"💸",label:id,color:"#94A3B8"}; }
 function walletById(id){ return STATE.wallets.find(w=>w.id===id); }
 function userById(id){ return STATE.familyUsers.find(u=>u.id===id); }
 function curMonthTx(){ const m = monthStr(); return STATE.transactions.filter(t=>t.date.indexOf(m)===0); }
-function ringChartSVG(segments, size, stroke, centerHTML){ const r = (size-stroke)/2, circ = 2*Math.PI*r; let offset=0; const total = segments.reduce((a,s)=>a+s.value,0)||1; let circles = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>`; segments.forEach(s=>{ const dash=(s.value/total)*circ; circles += `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}" stroke-dasharray="${dash-1.5} ${circ-dash+1.5}" stroke-dashoffset="${-offset}" stroke-linecap="round"/>`; offset+=dash; }); return `<div style="position:relative;width:${size}px;height:${size}px;"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">${circles}</svg>${centerHTML?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;">${centerHTML}</div>`:""}</div>`; }
 
-function txRowHTML(tx){
-  const cat = tx.type==="transfer" ? {icon:"↔️",color:"#A78BFA",label:"Transfer"} : catById(tx.category); const user = userById(tx.userId); const wallet = walletById(tx.walletId); const toWallet = walletById(tx.toWalletId); const isIncome = tx.type==="income", isTransfer = tx.type==="transfer"; const canDelete = tx.userId === STATE.user.id;
-  return `<div class="txrow"><div class="icon-circle" style="background:${cat.color}22;">${isTransfer?"↔️":cat.icon}</div><div style="flex:1;min-width:0;"><p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${esc(tx.keterangan)}</p><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;"><span style="font-size:10px;color:var(--slate5);">${tx.date}</span>${wallet?`<span style="font-size:10px;color:var(--slate5);">·${wallet.icon}${isTransfer&&toWallet?'→'+toWallet.icon:''}</span>`:""}${user?`<span style="font-size:10px;background:var(--card);padding:1px 5px;border-radius:20px;color:var(--slate3);">${user.avatar}</span>`:""}${isTransfer?`<span style="font-size:10px;background:var(--violetDim);padding:1px 6px;border-radius:20px;color:var(--violet);">transfer</span>`:""}${tx.receiptUrl?`<a href="${tx.receiptUrl}" target="_blank" style="font-size:10px;color:var(--teal);text-decoration:underline;">[Lihat Struk]</a>`:""}</div></div><div style="text-align:right;flex-shrink:0;"><p style="font-size:14px;font-weight:700;color:${isTransfer?'var(--violet)':isIncome?'var(--green)':'var(--rose)'};">${isTransfer?'⇄':isIncome?'+':'-'}${fmtK(tx.nominal)}</p>${canDelete?`<button onclick="deleteTx('${tx.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0;font-size:11px;margin-top:1px;">hapus</button>`:""}</div></div>`;
+function ringChartSVG(segments, size, stroke, centerHTML){
+  const r = (size-stroke)/2, circ = 2*Math.PI*r;
+  let offset=0; const total = segments.reduce((a,s)=>a+s.value,0)||1;
+  let circles = `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${stroke}"/>`;
+  segments.forEach(s=>{
+    const dash=(s.value/total)*circ;
+    circles += `<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}" stroke-dasharray="${dash-1.5} ${circ-dash+1.5}" stroke-dashoffset="${-offset}" stroke-linecap="round"/>`;
+    offset+=dash;
+  });
+  return `<div style="position:relative;width:${size}px;height:${size}px;">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">${circles}</svg>
+    ${centerHTML?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;">${centerHTML}</div>`:""}
+  </div>`;
 }
 
+function txRowHTML(tx){
+  const cat = tx.type==="transfer" ? {icon:"↔️",color:"#A78BFA",label:"Transfer"} : catById(tx.category);
+  const user = userById(tx.userId);
+  const wallet = walletById(tx.walletId);
+  const toWallet = walletById(tx.toWalletId);
+  const isIncome = tx.type==="income", isTransfer = tx.type==="transfer";
+  const canDelete = tx.userId === STATE.user.id;
+  return `<div class="txrow">
+    <div class="icon-circle" style="background:${cat.color}22;">${isTransfer?"↔️":cat.icon}</div>
+    <div style="flex:1;min-width:0;">
+      <p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${esc(tx.keterangan)}</p>
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+        <span style="font-size:10px;color:var(--slate5);">${tx.date}</span>
+        ${wallet?`<span style="font-size:10px;color:var(--slate5);">·${wallet.icon}${isTransfer&&toWallet?'→'+toWallet.icon:''}</span>`:""}
+        ${user?`<span style="font-size:10px;background:var(--card);padding:1px 5px;border-radius:20px;color:var(--slate3);">${user.avatar}</span>`:""}
+        ${isTransfer?`<span style="font-size:10px;background:var(--violetDim);padding:1px 6px;border-radius:20px;color:var(--violet);">transfer</span>`:""}
+        ${tx.receiptUrl?`<a href="${tx.receiptUrl}" target="_blank" style="font-size:10px;color:var(--gold);text-decoration:none;">📷 struk</a>`:""}
+      </div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <p style="font-size:14px;font-weight:700;color:${isTransfer?'var(--violet)':isIncome?'var(--green)':'var(--rose)'};">${isTransfer?'⇄':isIncome?'+':'-'}${fmtK(tx.nominal)}</p>
+      ${canDelete?`<button onclick="deleteTx('${tx.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0;font-size:11px;margin-top:1px;">hapus</button>`:""}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// DASHBOARD TAB
+// ============================================================
 function renderDashboard(){
-  const u = STATE.user, cur = monthStr(), myTx = curMonthTx();
+  const u = STATE.user, cur = monthStr();
+  const myTx = curMonthTx();
   const totalIncome = myTx.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.nominal),0);
   const totalExpense = myTx.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.nominal),0);
   const totalBalance = STATE.wallets.reduce((a,w)=>a+Number(w.balance),0);
   const cashflow = totalIncome - totalExpense;
-  const expByCat = {}; myTx.filter(t=>t.type==="expense").forEach(t=>{ expByCat[t.category]=(expByCat[t.category]||0)+Number(t.nominal); });
+
+  const expByCat = {};
+  myTx.filter(t=>t.type==="expense").forEach(t=>{ expByCat[t.category]=(expByCat[t.category]||0)+Number(t.nominal); });
   const ringSegs = Object.entries(expByCat).slice(0,7).map(([id,val])=>{ const c=catById(id); return {value:val,color:c.color,label:c.label}; });
-  const spendByUser = {}; myTx.filter(t=>t.type==="expense").forEach(t=>{ spendByUser[t.userId]=(spendByUser[t.userId]||0)+Number(t.nominal); });
+
+  const spendByUser = {};
+  myTx.filter(t=>t.type==="expense").forEach(t=>{ spendByUser[t.userId]=(spendByUser[t.userId]||0)+Number(t.nominal); });
+  const maxSpend = Math.max(...Object.values(spendByUser),1);
+
+  let html = `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;">
+      <p style="color:var(--slate3);font-size:12px;margin-bottom:2px;">Selamat datang 💰</p>
+      <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;">${u.avatar} ${esc(u.name)}</h2>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#0D2137,#0E1420);border:1px solid rgba(45,212,191,.2);border-radius:22px;padding:20px 18px;margin-bottom:14px;">
+      <p style="color:var(--slate3);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Total Aset Keluarga</p>
+      <p style="font-size:30px;font-weight:900;letter-spacing:-0.03em;margin-bottom:14px;">${fmtK(totalBalance)}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="background:rgba(8,12,20,.5);border-radius:12px;padding:10px;"><p style="color:var(--slate5);font-size:10px;margin-bottom:2px;">Pemasukan</p><p style="color:var(--green);font-size:14px;font-weight:800;">+${fmtK(totalIncome)}</p></div>
+        <div style="background:rgba(8,12,20,.5);border-radius:12px;padding:10px;"><p style="color:var(--slate5);font-size:10px;margin-bottom:2px;">Pengeluaran</p><p style="color:var(--rose);font-size:14px;font-weight:800;">-${fmtK(totalExpense)}</p></div>
+        <div style="background:rgba(8,12,20,.5);border-radius:12px;padding:10px;"><p style="color:var(--slate5);font-size:10px;margin-bottom:2px;">Cashflow</p><p style="color:${cashflow>=0?'var(--teal)':'var(--rose)'};font-size:14px;font-weight:800;">${cashflow>=0?'+':''}${fmtK(cashflow)}</p></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;margin-bottom:14px;">
+      <div class="card" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px;">
+        ${ringChartSVG(ringSegs.length?ringSegs:[{value:1,color:'var(--border)'}], 96, 11, `<div><p style="font-size:11px;font-weight:800;">${fmtK(totalExpense)}</p><p style="font-size:9px;color:var(--slate5);">keluar</p></div>`)}
+        <p style="font-size:10px;color:var(--slate5);">Bulan ini</p>
+      </div>
+      <div class="card" style="padding:14px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;margin-bottom:10px;">Per Anggota</p>
+        ${STATE.familyUsers.map(fu=>{
+          const spend = spendByUser[fu.id]||0;
+          return `<div style="margin-bottom:9px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:12px;">${fu.avatar} ${esc(fu.name)}</span><span style="font-size:12px;font-weight:700;color:var(--rose);">${fmtK(spend)}</span></div>
+            <div class="bar"><div class="bar-fill" style="width:${pct(spend,maxSpend)}%;background:${fu.role==='Suami'?'#60A5FA':'#F472B6'};"></div></div>
+          </div>`;
+        }).join("")}
+        ${ringSegs.length?`<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">
+          ${ringSegs.slice(0,3).map(s=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;"><div style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;"></div><span style="font-size:10px;color:var(--slate3);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.label)}</span><span style="font-size:10px;font-weight:700;">${fmtK(s.value)}</span></div>`).join("")}
+        </div>`:""}
+      </div>
+    </div>`;
+
+  // Budget traffic lights
+  const curBudgets = STATE.budgets.filter(b=>b.month===cur);
+  if(curBudgets.length){
+    html += `<div class="card" style="margin-bottom:14px;"><p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">🚦 Plafon Anggaran</p>`;
+    curBudgets.forEach(b=>{
+      const used = myTx.filter(t=>t.type==="expense"&&t.category===b.category).reduce((a,t)=>a+Number(t.nominal),0);
+      const p = pct(used,b.limitAmount);
+      const col = p>=100?'var(--rose)':p>=75?'var(--gold)':'var(--teal)';
+      const c = catById(b.category);
+      html += `<div style="margin-bottom:11px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:12px;">${c.icon} ${esc(b.label)}</span><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;color:var(--slate5);">${fmtK(used)}/${fmtK(b.limitAmount)}</span><span style="font-size:11px;color:${col};font-weight:700;">${p}%</span></div></div>
+        <div class="bar"><div class="bar-fill" style="width:${Math.min(p,100)}%;background:${col};"></div></div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Targets mini
+  STATE.targets.slice(0,2).forEach(g=>{
+    const p = pct(g.saved,g.target);
+    html += `<div class="card" style="border-color:${g.color}44;margin-bottom:10px;display:flex;align-items:center;gap:12px;">
+      <div style="width:42px;height:42px;border-radius:12px;background:${g.color}22;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${g.icon}</div>
+      <div style="flex:1;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;font-weight:600;">${esc(g.label)}</span><span style="font-size:12px;color:${g.color};font-weight:700;">${p}%</span></div>
+        <div class="bar"><div class="bar-fill" style="width:${Math.min(p,100)}%;background:${g.color};"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;"><span style="font-size:10px;color:var(--slate5);">${fmtK(g.saved)} terkumpul</span><span style="font-size:10px;color:var(--slate5);">dari ${fmtK(g.target)}</span></div>
+      </div>
+    </div>`;
+  });
+
+  // Recent tx
+  const recent = [...STATE.transactions].slice(0,5);
+  html += `<div class="card" style="padding:4px 14px;margin-top:6px;">
+    <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:12px 0 4px;">Transaksi Terkini</p>
+    ${recent.map(txRowHTML).join("") || '<p style="color:var(--slate5);text-align:center;padding:20px 0;font-size:13px;">Belum ada transaksi</p>'}
+  </div></div>`;
+
+  return html;
+}
+
+// ============================================================
+// WALLETS TAB
+// ============================================================
+let selectedWalletId = null;
+function renderWallets(){
+  if(!selectedWalletId && STATE.wallets.length) selectedWalletId = STATE.wallets[0].id;
+  const u = STATE.user;
+  const totalBalance = STATE.wallets.reduce((a,w)=>a+Number(w.balance),0);
+  const myWallets = STATE.wallets.filter(w=>w.ownerId===u.id || !w.ownerId);
+  const partnerWallets = STATE.wallets.filter(w=>w.ownerId && w.ownerId!==u.id);
+  const selected = STATE.wallets.find(w=>w.id===selectedWalletId);
+
+  const walletCard = (w) => `<div onclick="selectedWalletId='${w.id}';renderApp()" style="min-width:168px;background:linear-gradient(135deg,${w.color}22,${w.color}11);border:1.5px solid ${selectedWalletId===w.id?w.color:w.color+'44'};border-radius:18px;padding:14px 16px;cursor:pointer;flex-shrink:0;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-8px;right:-8px;font-size:44px;opacity:.07;">${w.icon}</div>
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;"><span style="font-size:14px;">${w.icon}</span><span style="font-size:10px;color:${w.color};font-weight:700;">${w.type.toUpperCase()}</span></div>
+    <p style="font-size:11px;color:var(--slate3);margin-bottom:3px;">${esc(w.name)}</p>
+    <p style="font-size:17px;font-weight:800;">${fmtK(w.balance)}</p>
+  </div>`;
+
+  let walletTx = [], wInc=0, wExp=0;
+  if(selected){
+    walletTx = STATE.transactions.filter(t=>t.walletId===selected.id || t.toWalletId===selected.id);
+    const m = monthStr();
+    wInc = walletTx.filter(t=>t.type==="income"&&t.date.indexOf(m)===0).reduce((a,t)=>a+Number(t.nominal),0);
+    wExp = walletTx.filter(t=>t.type==="expense"&&t.date.indexOf(m)===0).reduce((a,t)=>a+Number(t.nominal),0);
+  }
+
+  return `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;display:flex;justify-content:space-between;align-items:center;">
+      <div><p style="color:var(--slate3);font-size:11px;">Total semua rekening</p><p style="font-size:26px;font-weight:900;letter-spacing:-0.03em;">${fmt(totalBalance)}</p></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="openTransferModal()" style="background:var(--violetDim);border:1px solid var(--violet);color:var(--violet);border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;">${ICO.swap}Transfer</button>
+        <button onclick="openAddWalletModal()" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;">${ICO.plus}Tambah</button>
+      </div>
+    </div>
+
+    <p style="color:var(--slate5);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:8px;">Dompetku</p>
+    <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;">${myWallets.map(walletCard).join("")}</div>
+
+    ${partnerWallets.length?`<p style="color:var(--slate5);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:8px;">Dompet Pasangan</p>
+    <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;opacity:.65;">${partnerWallets.map(walletCard).join("")}</div>`:""}
+
+    ${selected?`<div class="card" style="border-color:${selected.color}44;margin-bottom:14px;">
+      <p style="font-size:13px;font-weight:700;margin-bottom:12px;">${selected.icon} ${esc(selected.name)}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:12px;"><p style="color:var(--slate5);font-size:10px;margin-bottom:2px;">Masuk bulan ini</p><p style="color:var(--green);font-size:15px;font-weight:800;">+${fmtK(wInc)}</p></div>
+        <div style="background:rgba(251,113,133,.07);border:1px solid rgba(251,113,133,.2);border-radius:12px;padding:12px;"><p style="color:var(--slate5);font-size:10px;margin-bottom:2px;">Keluar bulan ini</p><p style="color:var(--rose);font-size:15px;font-weight:800;">-${fmtK(wExp)}</p></div>
+      </div>
+    </div>`:""}
+
+    <div class="card" style="padding:4px 14px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:12px 0 4px;">Riwayat · ${selected?esc(selected.name):'—'}</p>
+      ${walletTx.slice(0,10).map(txRowHTML).join("") || '<p style="color:var(--slate5);font-size:13px;text-align:center;padding:24px 0;">Belum ada transaksi</p>'}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// TARGETS TAB
+// ============================================================
+let targetSection = "targets";
+function renderTargets(){
+  const cur = monthStr();
+  let html = `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="font-size:20px;font-weight:800;">Target & Plafon</h2>
+      <button onclick="${targetSection==='targets'?'openAddTargetModal()':'openAddBudgetModal()'}" style="background:var(--goldDim);border:1px solid var(--gold);color:var(--gold);border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;">${ICO.plus}Tambah</button>
+    </div>
+    <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:18px;">
+      <button class="tabbtn ${targetSection==='targets'?'active':''}" style="${targetSection==='targets'?'background:rgba(245,158,11,.2);color:var(--gold);':''}" onclick="targetSection='targets';renderApp()">🎯 Target Dana</button>
+      <button class="tabbtn ${targetSection==='budgets'?'active':''}" style="${targetSection==='budgets'?'background:rgba(245,158,11,.2);color:var(--gold);':''}" onclick="targetSection='budgets';renderApp()">📋 Plafon</button>
+    </div>`;
+
+  if(targetSection==="targets"){
+    if(!STATE.targets.length) html += `<div style="text-align:center;padding:40px 0;color:var(--slate5);"><p style="font-size:32px;">🎯</p><p>Belum ada target dana</p></div>`;
+    STATE.targets.forEach(g=>{
+      const p = pct(g.saved,g.target), rem = Math.max(g.target-g.saved,0);
+      const est = g.monthlyPlan>0 ? Math.ceil(rem/g.monthlyPlan)+" bln" : "—";
+      html += `<div class="card" style="border-color:${g.color}44;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div style="width:46px;height:46px;border-radius:13px;background:${g.color}22;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${g.icon}</div>
+          <div style="flex:1;"><p style="font-weight:700;font-size:15px;margin-bottom:2px;">${esc(g.label)}</p>${g.deadline?`<p style="font-size:11px;color:var(--slate5);">Deadline: ${g.deadline}</p>`:""}</div>
+          <button onclick="deleteTargetFn('${g.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:4px;">${ICO.trash}</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          ${ringChartSVG([{value:g.saved,color:g.color},{value:Math.max(rem,0),color:'var(--border)'}], 78, 9, `<p style="font-size:13px;font-weight:800;color:${g.color};">${p}%</p>`)}
+          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><p style="color:var(--slate5);font-size:10px;">Terkumpul</p><p style="color:${g.color};font-size:13px;font-weight:800;">${fmtK(g.saved)}</p></div>
+            <div><p style="color:var(--slate5);font-size:10px;">Target</p><p style="font-size:13px;font-weight:800;">${fmtK(g.target)}</p></div>
+            <div><p style="color:var(--slate5);font-size:10px;">Sisa</p><p style="color:var(--rose);font-size:13px;font-weight:800;">${fmtK(rem)}</p></div>
+            <div><p style="color:var(--slate5);font-size:10px;">Est.</p><p style="color:var(--teal);font-size:13px;font-weight:800;">${est}</p></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          ${[100000,500000,1000000].map(amt=>`<button onclick="bumpTargetFn('${g.id}',${g.saved}+${amt})" style="flex:1;padding:8px 0;border-radius:10px;background:${g.color}22;border:1px solid ${g.color}44;color:${g.color};font-size:11px;font-weight:700;">+${fmtK(amt)}</button>`).join("")}
+        </div>
+      </div>`;
+    });
+  } else {
+    if(!STATE.budgets.length) html += `<div style="text-align:center;padding:40px 0;color:var(--slate5);"><p style="font-size:32px;">📋</p><p>Belum ada plafon</p></div>`;
+    STATE.budgets.forEach(b=>{
+      const myTx = curMonthTx();
+      const used = myTx.filter(t=>t.type==="expense"&&t.category===b.category&&t.date.indexOf(b.month)===0).reduce((a,t)=>a+Number(t.nominal),0);
+      const p = pct(used,b.limitAmount);
+      const col = p>=100?'var(--rose)':p>=75?'var(--gold)':'var(--teal)';
+      const c = catById(b.category);
+      html += `<div class="card" style="border-color:${col}33;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:22px;">${c.icon}</span><div><p style="font-weight:700;font-size:14px;">${esc(b.label)}</p><p style="font-size:11px;color:var(--slate5);">${b.month}</p></div></div>
+          <div style="text-align:right;"><p style="font-size:14px;font-weight:800;color:${col};">${p}%</p><p style="font-size:11px;color:var(--slate5);">${fmtK(used)}/${fmtK(b.limitAmount)}</p></div>
+        </div>
+        <div class="bar" style="height:6px;"><div class="bar-fill" style="width:${Math.min(p,100)}%;background:${col};"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:7px;"><span style="font-size:11px;color:var(--slate5);">Sisa: <span style="color:${col};font-weight:700;">${fmtK(Math.max(b.limitAmount-used,0))}</span></span><button onclick="deleteBudgetFn('${b.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;font-size:11px;">hapus</button></div>
+      </div>`;
+    });
+  }
+  return html + `</div>`;
+}
+function deleteTargetFn(id){ call("deleteTarget", STATE.token, id).then(refreshAndRender); }
+function bumpTargetFn(id, newSaved){ call("bumpTarget", STATE.token, id, newSaved).then(()=>{refreshAndRender(); showToast("Target diperbarui ✓");}); }
+function deleteBudgetFn(id){ call("deleteBudget", STATE.token, id).then(refreshAndRender); }
+
+// ============================================================
+// HISTORY TAB
+// ============================================================
+let histFilterType = "all", histFilterUser = "all", histSearch = "";
+function renderHistory(){
+  let filtered = STATE.transactions
+    .filter(t=>histFilterType==="all"||t.type===histFilterType)
+    .filter(t=>histFilterUser==="all"||t.userId===histFilterUser)
+    .filter(t=>!histSearch||t.keterangan.toLowerCase().includes(histSearch.toLowerCase()));
+  const totals = {income:0,expense:0,transfer:0};
+  filtered.forEach(t=>totals[t.type]+=Number(t.nominal));
+
+  return `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="font-size:20px;font-weight:800;">Riwayat Transaksi</h2>
+      <button onclick="exportCSV()" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;">⬇ Export CSV</button>
+    </div>
+    <input id="hist-search" placeholder="🔍 Cari transaksi..." value="${esc(histSearch)}" oninput="histSearch=this.value;renderApp();setTimeout(()=>document.getElementById('hist-search').focus(),0);" style="margin-bottom:10px;"/>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;">
+      ${[["all","Semua"],["expense","Keluar"],["income","Masuk"],["transfer","Transfer"]].map(([t,l])=>`<button class="chip ${histFilterType===t?'active':''}" onclick="histFilterType='${t}';renderApp()">${l}</button>`).join("")}
+      <div style="width:1px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>
+      ${STATE.familyUsers.map(u=>`<button class="chip ${histFilterUser===u.id?'active':''}" style="${histFilterUser===u.id?'background:var(--tealDim);color:var(--teal);':''}" onclick="histFilterUser=histFilterUser==='${u.id}'?'all':'${u.id}';renderApp()">${u.avatar} ${esc(u.name)}</button>`).join("")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
+      <div style="background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.13);border-radius:12px;padding:10px 12px;"><p style="color:var(--slate5);font-size:10px;">Masuk</p><p style="color:var(--green);font-size:14px;font-weight:800;">+${fmtK(totals.income)}</p></div>
+      <div style="background:rgba(251,113,133,.07);border:1px solid rgba(251,113,133,.13);border-radius:12px;padding:10px 12px;"><p style="color:var(--slate5);font-size:10px;">Keluar</p><p style="color:var(--rose);font-size:14px;font-weight:800;">-${fmtK(totals.expense)}</p></div>
+      <div style="background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.13);border-radius:12px;padding:10px 12px;"><p style="color:var(--slate5);font-size:10px;">Transfer</p><p style="color:var(--violet);font-size:14px;font-weight:800;">${fmtK(totals.transfer)}</p></div>
+    </div>
+    <div class="card" style="padding:4px 14px;">
+      ${filtered.map(txRowHTML).join("") || '<p style="color:var(--slate5);text-align:center;padding:28px 0;font-size:13px;">Tidak ada transaksi</p>'}
+    </div>
+  </div>`;
+}
+function deleteTx(id){
+  call("deleteTransaction", STATE.token, id)
+    .then(d=>{STATE=d; renderApp(); showToast("Transaksi dihapus, saldo dipulihkan","info");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+function exportCSV(){
+  const filtered = STATE.transactions
+    .filter(t=>histFilterType==="all"||t.type===histFilterType)
+    .filter(t=>histFilterUser==="all"||t.userId===histFilterUser)
+    .filter(t=>!histSearch||t.keterangan.toLowerCase().includes(histSearch.toLowerCase()));
+  if(!filtered.length){ showToast("Tidak ada transaksi untuk diexport","info"); return; }
+  const headers = ["Tanggal","Tipe","Kategori","Keterangan","Dompet","Tujuan Transfer","Nominal","Dicatat Oleh"];
+  const rows = filtered.map(t=>{
+    const cat = t.type==="transfer"?"Transfer":catById(t.category).label;
+    const wallet = walletById(t.walletId)?.name || "";
+    const toWallet = walletById(t.toWalletId)?.name || "";
+    const user = userById(t.userId)?.name || "";
+    const typeLabel = t.type==="income"?"Pemasukan":t.type==="expense"?"Pengeluaran":"Transfer";
+    return [t.date, typeLabel, cat, t.keterangan, wallet, toWallet, t.nominal, user];
+  });
+  const csvEsc = (v) => `"${String(v).replace(/"/g,'""')}"`;
+  const csv = "\uFEFF" + [headers, ...rows].map(r=>r.map(csvEsc).join(",")).join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const label = histFilterType==="all"?"semua":histFilterType;
+  a.href = url; a.download = `famili-finance-${label}-${monthStr()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast("CSV berhasil diunduh ✓");
+}
+
+// ============================================================
+// ANALYZER TAB
+// ============================================================
+let analyzerPeriod = "month";
+function renderAnalyzer(){
+  const now = new Date();
+  const nMonths = {month:1,"3month":3,"6month":6}[analyzerPeriod];
+  const monthly = [];
+  for(let i=0;i<nMonths;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-(nMonths-1-i), 1);
+    const key = monthStr(d);
+    const txs = STATE.transactions.filter(t=>t.date.indexOf(key)===0);
+    const income = txs.filter(t=>t.type==="income").reduce((a,t)=>a+Number(t.nominal),0);
+    const expense = txs.filter(t=>t.type==="expense").reduce((a,t)=>a+Number(t.nominal),0);
+    monthly.push({label:d.toLocaleString("id-ID",{month:"short"}), income, expense, cashflow:income-expense});
+  }
+  const maxBar = Math.max(...monthly.map(d=>Math.max(d.income,d.expense)),1), BH=72;
+
+  const cur = monthStr();
+  const curTx = STATE.transactions.filter(t=>t.date.indexOf(cur)===0);
+  const expByCat = {};
+  curTx.filter(t=>t.type==="expense").forEach(t=>{expByCat[t.category]=(expByCat[t.category]||0)+Number(t.nominal);});
+  const totalExp = Object.values(expByCat).reduce((a,b)=>a+b,0)||1;
+  const catBreak = Object.entries(expByCat).sort((a,b)=>b[1]-a[1]).map(([id,val])=>({id,val,p:Math.round((val/totalExp)*100),cat:catById(id)}));
+
+  const incByCat = {};
+  curTx.filter(t=>t.type==="income").forEach(t=>{incByCat[t.category]=(incByCat[t.category]||0)+Number(t.nominal);});
+  const totalInc = Object.values(incByCat).reduce((a,b)=>a+b,0)||1;
+
+  const leakage = curTx.filter(t=>t.type==="expense"&&Number(t.nominal)<50000);
+  const leakGroups = {};
+  leakage.forEach(t=>{leakGroups[t.category]=(leakGroups[t.category]||0)+1;});
+  const totalLeak = leakage.reduce((a,t)=>a+Number(t.nominal),0);
+
+  let html = `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;"><h2 style="font-size:20px;font-weight:800;">Analyzer</h2></div>
+    <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:14px;">
+      ${[["month","Bulan Ini"],["3month","3 Bulan"],["6month","6 Bulan"]].map(([p,l])=>`<button class="tabbtn ${analyzerPeriod===p?'active':''}" style="${analyzerPeriod===p?'background:rgba(167,139,250,.2);color:var(--violet);':''}" onclick="analyzerPeriod='${p}';renderApp()">${l}</button>`).join("")}
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">Tren Keuangan</p>
+        <div style="display:flex;gap:10px;">
+          <span style="font-size:10px;color:var(--slate5);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block;"></span>Masuk</span>
+          <span style="font-size:10px;color:var(--slate5);display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:var(--rose);display:inline-block;"></span>Keluar</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:${BH+20}px;">
+        ${monthly.map(d=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
+          <div style="display:flex;align-items:flex-end;gap:2px;height:${BH}px;">
+            <div style="width:45%;background:var(--green);border-radius:3px 3px 0 0;height:${(d.income/maxBar)*BH}px;min-height:2px;"></div>
+            <div style="width:45%;background:var(--rose);border-radius:3px 3px 0 0;height:${(d.expense/maxBar)*BH}px;min-height:2px;"></div>
+          </div>
+          <span style="font-size:9px;color:var(--slate5);">${d.label}</span>
+        </div>`).join("")}
+      </div>
+      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;justify-content:space-around;">
+        ${monthly.map(d=>`<span style="flex:1;text-align:center;font-size:10px;color:${d.cashflow>=0?'var(--teal)':'var(--rose)'};font-weight:700;">${d.cashflow>=0?'+':''}${fmtK(d.cashflow)}</span>`).join("")}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">Komposisi Pengeluaran</p>
+      <div style="display:flex;align-items:center;gap:14px;">
+        ${ringChartSVG(catBreak.map(c=>({value:c.p,color:c.cat.color})), 88, 10, `<p style="font-size:11px;font-weight:800;">${fmtK(totalExp)}</p>`)}
+        <div style="flex:1;">
+          ${catBreak.slice(0,5).map(c=>`<div style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:11px;">${c.cat.icon} ${esc(c.cat.label)}</span><span style="font-size:11px;font-weight:700;color:${c.cat.color};">${c.p}%</span></div><div class="bar" style="height:3px;"><div class="bar-fill" style="width:${c.p}%;background:${c.cat.color};"></div></div></div>`).join("")}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">Sumber Pemasukan</p>
+      ${Object.entries(incByCat).sort((a,b)=>b[1]-a[1]).map(([id,val])=>{
+        const c=catById(id), p=Math.round((val/totalInc)*100);
+        return `<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:12px;">${c.icon} ${esc(c.label)}</span><span style="font-size:12px;font-weight:700;color:var(--green);">${fmtK(val)}</span></div><div class="bar" style="height:4px;"><div class="bar-fill" style="width:${p}%;background:${c.color};"></div></div></div>`;
+      }).join("") || '<p style="color:var(--slate5);font-size:13px;text-align:center;padding:12px 0;">Belum ada pemasukan bulan ini</p>'}
+    </div>
+
+    <div class="card" style="border-color:rgba(245,158,11,.2);margin-bottom:12px;">
+      <p style="color:var(--gold);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:4px;">⚠️ Detektor Kebocoran Halus</p>
+      <p style="color:var(--slate5);font-size:12px;margin-bottom:12px;">Pengeluaran &lt;Rp50rb yang berulang</p>
+      ${leakage.length===0?`<p style="color:var(--green);font-size:13px;text-align:center;padding:8px 0;">✓ Tidak ada kebocoran terdeteksi</p>`:
+        Object.entries(leakGroups).sort((a,b)=>b[1]-a[1]).map(([catId,count])=>{
+          const c = catById(catId), catTotal = leakage.filter(t=>t.category===catId).reduce((a,t)=>a+Number(t.nominal),0);
+          return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-size:18px;">${c.icon}</span><div style="flex:1;"><div style="display:flex;justify-content:space-between;"><span style="font-size:12px;">${esc(c.label)}</span><span style="font-size:12px;font-weight:700;color:var(--gold);">${count}x · ${fmtK(catTotal)}</span></div><div class="bar" style="height:3px;margin-top:3px;"><div class="bar-fill" style="width:${(count/leakage.length)*100}%;background:var(--gold);"></div></div></div></div>`;
+        }).join("") + `<div style="background:var(--goldDim);border-radius:12px;padding:10px;margin-top:8px;"><p style="color:var(--gold);font-size:12px;font-weight:700;">Total kebocoran: ${fmt(totalLeak)} · ${leakage.length} transaksi</p></div>`
+      }
+    </div>
+
+    <div class="card">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">📊 Progress Target Dana</p>
+      ${STATE.targets.map(g=>{const p=pct(g.saved,g.target); return `<div style="margin-bottom:13px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;">${g.icon} ${esc(g.label)}</span><span style="font-size:12px;font-weight:700;color:${g.color};">${p}% · ${fmtK(g.saved)}</span></div><div class="bar"><div class="bar-fill" style="width:${Math.min(p,100)}%;background:${g.color};"></div></div></div>`;}).join("")}
+    </div>
+  </div>`;
+  return html;
+}
+
+// ============================================================
+// SETTINGS TAB
+// ============================================================
+function renderSettings(){
+  const u = STATE.user;
+  const catChip = (c,type) => `<div style="display:flex;align-items:center;gap:5px;background:${c.color}15;border:1px solid ${c.color}44;border-radius:20px;padding:5px 10px;">
+    <span style="font-size:14px;">${c.icon}</span><span style="font-size:11px;color:${c.color};font-weight:600;">${esc(c.label)}</span>
+    ${c.isCustom?`<button onclick="deleteCatFn('${type}','${c.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0 0 0 2px;font-size:12px;line-height:1;">×</button>`:""}
+  </div>`;
+  const exp = STATE.categories.filter(c=>c.type==="expense");
+  const inc = STATE.categories.filter(c=>c.type==="income");
+
+  return `<div style="padding:0 16px 100px;">
+    <div style="padding:18px 0 14px;"><h2 style="font-size:20px;font-weight:800;">Pengaturan</h2></div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">Info Keluarga</p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:14px;background:var(--tealDim);display:flex;align-items:center;justify-content:center;font-size:22px;">${u.avatar}</div>
+        <div><p style="font-weight:700;margin-bottom:2px;">${esc(u.name)}</p><p style="font-size:12px;color:var(--teal);">${u.role} · ${esc(u.email)}</p></div>
+      </div>
+      <div style="background:var(--card);border-radius:12px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:var(--slate3);">Kode Keluarga</span>
+        <span style="font-size:12px;font-weight:700;color:var(--gold);font-family:monospace;">${esc(STATE.familyCode)}</span>
+      </div>
+      <p style="color:var(--slate5);font-size:11px;margin-top:8px;">Bagikan kode ini ke pasangan agar bisa bergabung ke dashboard yang sama.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">Kategori Pengeluaran</p>
+        <button onclick="openAddCategoryModal('expense')" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">${ICO.plus}Tambah</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${exp.map(c=>catChip(c,"expense")).join("")}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">Kategori Pemasukan</p>
+        <button onclick="openAddCategoryModal('income')" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">${ICO.plus}Tambah</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${inc.map(c=>catChip(c,"income")).join("")}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">🔁 Transaksi Rutin</p>
+        <button onclick="openAddRecurringModal()" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">${ICO.plus}Tambah</button>
+      </div>
+      ${(STATE.recurring||[]).length===0?`<p style="color:var(--slate5);font-size:13px;text-align:center;padding:8px 0;">Belum ada transaksi rutin. Cocok untuk gaji, cicilan, tagihan bulanan.</p>`:
+        (STATE.recurring||[]).map(r=>{
+          const cat = catById(r.category);
+          const wallet = walletById(r.walletId);
+          const isIncome = r.type==="income";
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <div class="icon-circle" style="background:${cat.color}22;">${cat.icon}</div>
+            <div style="flex:1;min-width:0;">
+              <p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${esc(r.keterangan)}</p>
+              <p style="font-size:10px;color:var(--slate5);">Tgl ${r.dayOfMonth} setiap bulan · ${wallet?wallet.icon+' '+esc(wallet.name):''}</p>
+            </div>
+            <div style="text-align:right;">
+              <p style="font-size:13px;font-weight:700;color:${isIncome?'var(--green)':'var(--rose)'};">${isIncome?'+':'-'}${fmtK(r.nominal)}</p>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:2px;">
+                <button onclick="toggleRecurringFn('${r.id}',${!r.active})" style="background:none;border:none;color:${r.active?'var(--teal)':'var(--slate5)'};cursor:pointer;font-size:11px;">${r.active?'aktif':'nonaktif'}</button>
+                <button onclick="deleteRecurringFn('${r.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0;">${ICO.trash}</button>
+              </div>
+            </div>
+          </div>`;
+        }).join("")}
+      <p style="color:var(--slate5);font-size:11px;margin-top:10px;">Transaksi rutin otomatis tercatat saat tanggal yang ditentukan tiba (dicek setiap kali app dibuka).</p>
+    </div>
+
+    <div class="card" style="border:1px dashed var(--border);">
+      <p style="color:#22D3EE;font-size:11px;font-weight:700;margin-bottom:6px;">📊 Database: Google Sheets</p>
+      <p style="color:var(--slate5);font-size:12px;line-height:1.6;">Semua data tersimpan di Google Spreadsheet milik kamu. Buka Apps Script project untuk melihat / backup data secara langsung.</p>
+    </div>
+  </div>`;
+}
+function deleteCatFn(type,id){ call("deleteCategory", STATE.token, type, id).then(refreshAndRender); }
+
+// ============================================================
+// MODALS
+// ============================================================
+function openAddTxModal(){
+  renderTxModal("expense");
+}
+function renderTxModal(type, selCat){
+  const wallets = STATE.wallets.filter(w=>w.ownerId===STATE.user.id || !w.ownerId);
+  const cats = STATE.categories.filter(c=>c.type===type);
+  const cat = selCat || cats[0]?.id;
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Catat Transaksi</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:18px;">
+      <button class="tabbtn" style="${type==='expense'?'background:rgba(251,113,133,.2);color:var(--rose);':''}" onclick="renderTxModal('expense')">↑ Pengeluaran</button>
+      <button class="tabbtn" style="${type==='income'?'background:rgba(74,222,128,.2);color:var(--green);':''}" onclick="renderTxModal('income')">↓ Pemasukan</button>
+    </div>
+    <div class="field"><span class="label">Nominal (Rp)</span><input id="tx-nominal" type="number" placeholder="0" style="font-size:22px;font-weight:800;" oninput="document.getElementById('tx-nominal-fmt').textContent=this.value?fmt(parseInt(this.value)):''"/><p id="tx-nominal-fmt" style="color:var(--slate3);font-size:12px;margin-top:4px;"></p></div>
+    <div class="field"><span class="label">Kategori</span>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:200px;overflow-y:auto;" id="tx-cats">
+        ${cats.map(c=>`<button class="cat-btn ${c.id===cat?'active':''}" style="${c.id===cat?`border-color:${c.color};background:${c.color}22;`:''}" onclick="selectTxCat(this,'${c.id}','${c.color}')" data-cat="${c.id}"><span style="font-size:18px;">${c.icon}</span><span style="font-size:9px;font-weight:600;color:${c.id===cat?c.color:'var(--slate5)'};text-align:center;">${esc(c.label.split(' ')[0])}</span></button>`).join("")}
+      </div>
+    </div>
+    <div class="field"><span class="label">Dompet / Rekening</span><select id="tx-wallet">${wallets.map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)} (${fmtK(w.balance)})</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Keterangan</span><input id="tx-ket" placeholder="Tulis singkat..."/></div>
+    <div class="field"><span class="label">Tanggal</span><input id="tx-date" type="date" value="${todayStr()}"/></div>
+    <input type="hidden" id="tx-cat-selected" value="${cat||''}"/>
+    <div class="field">
+      <span class="label">Foto Struk (opsional)</span>
+      <input type="file" id="tx-receipt" accept="image/*" capture="environment" onchange="previewReceipt(this)"/>
+      <div id="tx-receipt-preview" style="margin-top:8px;"></div>
+    </div>
+    <button class="btn" id="tx-submit-btn" style="background:${type==='expense'?'linear-gradient(135deg,var(--rose),#BE123C)':'linear-gradient(135deg,var(--green),#16A34A)'};color:${type==='expense'?'#fff':'var(--bg)'};" onclick="submitTx('${type}')">Simpan</button>
+  `);
+}
+
+let pendingReceipt = null; // {base64, name, mime}
+function previewReceipt(input){
+  const file = input.files[0];
+  if(!file){ pendingReceipt=null; document.getElementById("tx-receipt-preview").innerHTML=""; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1000;
+      let w=img.width, h=img.height;
+      if(w>MAX||h>MAX){ const r=Math.min(MAX/w,MAX/h); w=Math.round(w*r); h=Math.round(h*r); }
+      const canvas = document.createElement("canvas");
+      canvas.width=w; canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      const dataUrl = canvas.toDataURL("image/jpeg",0.7);
+      pendingReceipt = {base64: dataUrl.split(",")[1], name: file.name||"struk.jpg", mime:"image/jpeg"};
+      document.getElementById("tx-receipt-preview").innerHTML = `<img src="${dataUrl}" style="max-width:100%;border-radius:10px;border:1px solid var(--border);"/>`;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function selectTxCat(btn,id,color){
+  document.querySelectorAll('#tx-cats .cat-btn').forEach(b=>{b.style.borderColor='var(--border)';b.style.background='var(--card)';b.querySelector('span:last-child').style.color='var(--slate5)';});
+  btn.style.borderColor=color; btn.style.background=color+'22'; btn.querySelector('span:last-child').style.color=color;
+  document.getElementById('tx-cat-selected').value=id;
+}
+function submitTx(type){
+  const nominal = parseInt(document.getElementById("tx-nominal").value);
+  const category = document.getElementById("tx-cat-selected").value;
+  const walletId = document.getElementById("tx-wallet").value;
+  const keterangan = document.getElementById("tx-ket").value;
+  const date = document.getElementById("tx-date").value;
+  if(!nominal || !walletId){ showToast("Lengkapi nominal & dompet","error"); return; }
+  const payload = {type,category,walletId,nominal,keterangan,date};
+  if(pendingReceipt){ payload.receiptBase64=pendingReceipt.base64; payload.receiptName=pendingReceipt.name; payload.receiptMime=pendingReceipt.mime; }
+  const btn = document.getElementById("tx-submit-btn");
+  btn.textContent = "Menyimpan..."; btn.disabled = true;
+  call("addTransaction", STATE.token, payload)
+    .then(d=>{STATE=d; pendingReceipt=null; closeModal(); renderApp(); showToast("Transaksi disimpan ✓");})
+    .catch(e=>{showToast(e.message,"error"); btn.textContent="Simpan"; btn.disabled=false;});
+}
+
+function openTransferModal(){
+  const myWallets = STATE.wallets.filter(w=>w.ownerId===STATE.user.id || !w.ownerId);
+  if(myWallets.length<2){ showToast("Minimal punya 2 dompet untuk transfer","info"); return; }
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Transfer Antar Dompet</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div class="field"><span class="label">Dari Dompet</span><select id="tr-from" onchange="updateTransferInfo()">${myWallets.map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)} — ${fmtK(w.balance)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Ke Dompet</span><select id="tr-to" onchange="updateTransferInfo()">${STATE.wallets.map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)} — ${fmtK(w.balance)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Nominal (Rp)</span><input id="tr-nominal" type="number" placeholder="0" style="font-size:20px;font-weight:800;"/></div>
+    <div class="field"><span class="label">Keterangan (opsional)</span><input id="tr-ket" placeholder="cth: Bagi biaya dapur"/></div>
+    <div id="tr-warning" style="color:var(--rose);font-size:13px;margin-bottom:10px;"></div>
+    <button class="btn" style="background:linear-gradient(135deg,var(--violet),#7C3AED);color:#fff;" onclick="submitTransfer()">Transfer Sekarang</button>
+  `);
+}
+function updateTransferInfo(){}
+function submitTransfer(){
+  const fromId = document.getElementById("tr-from").value;
+  const toId = document.getElementById("tr-to").value;
+  const nominal = parseInt(document.getElementById("tr-nominal").value);
+  const keterangan = document.getElementById("tr-ket").value;
+  if(fromId===toId){ document.getElementById("tr-warning").textContent="Dompet asal dan tujuan tidak boleh sama"; return; }
+  if(!nominal){ document.getElementById("tr-warning").textContent="Isi nominal transfer"; return; }
+  call("addTransaction", STATE.token, {type:"transfer",category:"transfer",walletId:fromId,toWalletId:toId,nominal,keterangan,date:todayStr()})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Transfer berhasil ✓");})
+    .catch(e=>{document.getElementById("tr-warning").textContent=e.message;});
+}
+
+function openAddWalletModal(){
+  const icons = ["🏦","📱","💵","💳","🏧","🪙","💰","🏪","📊","💼"];
+  const colors = ["#2DD4BF","#F59E0B","#A78BFA","#FB7185","#4ADE80","#3B82F6","#F97316","#EC4899"];
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Tambah Dompet / Rekening</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div class="field"><span class="label">Jenis</span><select id="w-type"><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option><option value="invest">Investasi</option></select></div>
+    <div class="field"><span class="label">Nama Rekening</span><input id="w-name" placeholder="cth: BCA Tabungan"/></div>
+    <div class="field"><span class="label">Saldo Awal</span><input id="w-balance" type="number" placeholder="0"/></div>
+    <div class="field"><span class="label">Ikon</span><div style="display:flex;gap:6px;flex-wrap:wrap;" id="w-icons">${icons.map((ic,i)=>`<button type="button" onclick="pickIcon(this,'${ic}')" data-icon="${ic}" style="width:38px;height:38px;border-radius:10px;border:1px solid ${i===0?'var(--teal)':'var(--border)'};background:${i===0?'var(--tealDim)':'var(--card)'};font-size:18px;" class="${i===0?'picked':''}">${ic}</button>`).join("")}</div></div>
+    <div class="field"><span class="label">Warna</span><div style="display:flex;gap:8px;" id="w-colors">${colors.map((c,i)=>`<button type="button" onclick="pickColor(this,'${c}')" data-color="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};border:${i===0?'3px solid white':'3px solid transparent'};" class="${i===0?'picked':''}"></button>`).join("")}</div></div>
+    <input type="hidden" id="w-icon-val" value="${icons[0]}"/><input type="hidden" id="w-color-val" value="${colors[0]}"/>
+    <button class="btn btn-primary" onclick="submitWallet()">Simpan</button>
+  `);
+}
+function pickIcon(btn,ic){ document.querySelectorAll('#w-icons button').forEach(b=>{b.style.border='1px solid var(--border)';b.style.background='var(--card)';}); btn.style.border='1px solid var(--teal)'; btn.style.background='var(--tealDim)'; document.getElementById('w-icon-val').value=ic; }
+function pickColor(btn,c){ document.querySelectorAll('#w-colors button').forEach(b=>b.style.border='3px solid transparent'); btn.style.border='3px solid white'; document.getElementById('w-color-val').value=c; }
+function submitWallet(){
+  const name = document.getElementById("w-name").value.trim();
+  const balance = parseInt(document.getElementById("w-balance").value)||0;
+  if(!name){ showToast("Isi nama rekening","error"); return; }
+  call("addWallet", STATE.token, {ownerId:STATE.user.id, name, type:document.getElementById("w-type").value, balance, color:document.getElementById("w-color-val").value, icon:document.getElementById("w-icon-val").value})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Dompet ditambahkan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+function openAddTargetModal(){
+  const icons = ["🎯","🏠","🚗","✈️","🎓","💍","🤱","🛡️","💊","🏋️","🌴","🔑"];
+  const colors = ["#2DD4BF","#F59E0B","#A78BFA","#FB7185","#4ADE80","#3B82F6"];
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Tambah Target Dana</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div class="field"><span class="label">Nama Target</span><input id="g-label" placeholder="cth: Dana Liburan Bali"/></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="field"><span class="label">Ikon</span><div style="display:flex;flex-wrap:wrap;gap:5px;" id="g-icons">${icons.map((ic,i)=>`<button type="button" onclick="pickGIcon(this,'${ic}')" style="width:34px;height:34px;border-radius:8px;border:1px solid ${i===0?'var(--teal)':'var(--border)'};background:${i===0?'var(--tealDim)':'var(--card)'};font-size:16px;">${ic}</button>`).join("")}</div></div>
+      <div class="field"><span class="label">Warna</span><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="g-colors">${colors.map((c,i)=>`<button type="button" onclick="pickGColor(this,'${c}')" style="width:28px;height:28px;border-radius:50%;background:${c};border:${i===0?'3px solid white':'3px solid transparent'};"></button>`).join("")}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="field"><span class="label">Target Dana (Rp)</span><input id="g-target" type="number" placeholder="0"/></div>
+      <div class="field"><span class="label">Sudah Terkumpul</span><input id="g-saved" type="number" placeholder="0" value="0"/></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="field"><span class="label">Rencana Bulanan</span><input id="g-monthly" type="number" placeholder="0"/></div>
+      <div class="field"><span class="label">Deadline</span><input id="g-deadline" type="date"/></div>
+    </div>
+    <input type="hidden" id="g-icon-val" value="${icons[0]}"/><input type="hidden" id="g-color-val" value="${colors[0]}"/>
+    <button class="btn btn-primary" onclick="submitTarget()">Simpan Target</button>
+  `);
+}
+function pickGIcon(btn,ic){ /* fallback uses last clicked */ document.querySelectorAll('#g-icons button').forEach(b=>{b.style.border='1px solid var(--border)';b.style.background='var(--card)';}); btn.style.border='1px solid var(--teal)'; btn.style.background='var(--tealDim)'; document.getElementById('g-icon-val').value=btn.textContent; }
+function pickGColor(btn,c){ document.querySelectorAll('#g-colors button').forEach(b=>b.style.border='3px solid transparent'); btn.style.border='3px solid white'; document.getElementById('g-color-val').value=c; }
+function submitTarget(){
+  const label = document.getElementById("g-label").value.trim();
+  const target = parseInt(document.getElementById("g-target").value);
+  if(!label||!target){ showToast("Isi nama dan target dana","error"); return; }
+  call("addTarget", STATE.token, {
+    label, icon:document.getElementById("g-icon-val").value, color:document.getElementById("g-color-val").value,
+    target, saved:parseInt(document.getElementById("g-saved").value)||0,
+    monthlyPlan:parseInt(document.getElementById("g-monthly").value)||0, deadline:document.getElementById("g-deadline").value
+  }).then(d=>{STATE=d; closeModal(); renderApp(); showToast("Target ditambahkan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+function openAddBudgetModal(){
+  const cats = STATE.categories.filter(c=>c.type==="expense");
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Atur Plafon Anggaran</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div class="field"><span class="label">Kategori</span>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:220px;overflow-y:auto;" id="b-cats">
+        ${cats.map((c,i)=>`<button type="button" class="cat-btn ${i===0?'active':''}" style="${i===0?`border-color:${c.color};background:${c.color}22;`:''}" onclick="selectBudgetCat(this,'${c.id}','${c.label}','${c.color}')" data-cat="${c.id}"><span style="font-size:16px;">${c.icon}</span><span style="font-size:9px;font-weight:600;color:${i===0?c.color:'var(--slate5)'};">${esc(c.label.split(' ')[0])}</span></button>`).join("")}
+      </div>
+    </div>
+    <div class="field"><span class="label">Plafon (Rp)</span><input id="b-limit" type="number" placeholder="0" style="font-size:18px;font-weight:700;"/></div>
+    <div class="field"><span class="label">Bulan</span><input id="b-month" type="month" value="${monthStr()}"/></div>
+    <input type="hidden" id="b-cat-val" value="${cats[0]?.id||''}"/><input type="hidden" id="b-label-val" value="${cats[0]?.label||''}"/>
+    <button class="btn" style="background:linear-gradient(135deg,var(--gold),#D97706);color:var(--bg);" onclick="submitBudget()">Simpan Plafon</button>
+  `);
+}
+function selectBudgetCat(btn,id,label,color){
+  document.querySelectorAll('#b-cats .cat-btn').forEach(b=>{b.style.borderColor='var(--border)';b.style.background='var(--card)';b.querySelector('span:last-child').style.color='var(--slate5)';});
+  btn.style.borderColor=color; btn.style.background=color+'22'; btn.querySelector('span:last-child').style.color=color;
+  document.getElementById('b-cat-val').value=id; document.getElementById('b-label-val').value=label;
+}
+function submitBudget(){
+  const limit = parseInt(document.getElementById("b-limit").value);
+  if(!limit){ showToast("Isi nominal plafon","error"); return; }
+  call("addBudget", STATE.token, {category:document.getElementById("b-cat-val").value, label:document.getElementById("b-label-val").value, limit, month:document.getElementById("b-month").value})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Plafon ditambahkan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+function openAddCategoryModal(type){
+  const expIcons=["📦","🍼","🧼","🛵","💄","🐈","🍕","🎁","💊","🪴","🎀","⚽"];
+  const incIcons=["💵","🏆","📊","🎯","🏭","🤝","💎","🌾"];
+  const icons = type==="expense"?expIcons:incIcons;
+  const colors=["#2DD4BF","#F59E0B","#FB7185","#A78BFA","#4ADE80","#F97316","#3B82F6","#EC4899","#14B8A6"];
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Kategori ${type==='expense'?'Pengeluaran':'Pemasukan'} Baru</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div class="field"><span class="label">Nama Kategori</span><input id="c-label" placeholder="cth: Keperluan Bayi"/></div>
+    <div class="field"><span class="label">Ikon</span><div style="display:flex;gap:6px;flex-wrap:wrap;" id="c-icons">${icons.map((ic,i)=>`<button type="button" onclick="pickCIcon(this,'${ic}')" style="width:38px;height:38px;border-radius:10px;border:1px solid ${i===0?'var(--teal)':'var(--border)'};background:${i===0?'var(--tealDim)':'var(--card)'};font-size:18px;">${ic}</button>`).join("")}</div></div>
+    <div class="field"><span class="label">Warna</span><div style="display:flex;gap:8px;flex-wrap:wrap;" id="c-colors">${colors.map((c,i)=>`<button type="button" onclick="pickCColor(this,'${c}')" style="width:28px;height:28px;border-radius:50%;background:${c};border:${i===0?'3px solid white':'3px solid transparent'};"></button>`).join("")}</div></div>
+    <input type="hidden" id="c-icon-val" value="${icons[0]}"/><input type="hidden" id="c-color-val" value="${colors[0]}"/>
+    <button class="btn btn-primary" onclick="submitCategory('${type}')">Simpan Kategori</button>
+  `);
+}
+function pickCIcon(btn,ic){ document.querySelectorAll('#c-icons button').forEach(b=>{b.style.border='1px solid var(--border)';b.style.background='var(--card)';}); btn.style.border='1px solid var(--teal)'; btn.style.background='var(--tealDim)'; document.getElementById('c-icon-val').value=ic; }
+function pickCColor(btn,c){ document.querySelectorAll('#c-colors button').forEach(b=>b.style.border='3px solid transparent'); btn.style.border='3px solid white'; document.getElementById('c-color-val').value=c; }
+function submitCategory(type){
+  const label = document.getElementById("c-label").value.trim();
+  if(!label){ showToast("Isi nama kategori","error"); return; }
+  const id = label.toLowerCase().replace(/\s+/g,"_") + "_" + uid();
+  call("addCategory", STATE.token, type, {id, label, icon:document.getElementById("c-icon-val").value, color:document.getElementById("c-color-val").value})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Kategori ditambahkan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+// ============================================================
+// RECURRING TRANSACTIONS MODAL
+// ============================================================
+function openAddRecurringModal(){
+  renderRecurringModal("expense");
+}
+function renderRecurringModal(type, selCat){
+  const wallets = STATE.wallets.filter(w=>w.ownerId===STATE.user.id || !w.ownerId);
+  const cats = STATE.categories.filter(c=>c.type===type);
+  const cat = selCat || cats[0]?.id;
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Tambah Transaksi Rutin</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <div style="display:flex;background:var(--card);border-radius:12px;padding:3px;margin-bottom:18px;">
+      <button class="tabbtn" style="${type==='expense'?'background:rgba(251,113,133,.2);color:var(--rose);':''}" onclick="renderRecurringModal('expense')">↑ Pengeluaran</button>
+      <button class="tabbtn" style="${type==='income'?'background:rgba(74,222,128,.2);color:var(--green);':''}" onclick="renderRecurringModal('income')">↓ Pemasukan</button>
+    </div>
+    <div class="field"><span class="label">Nominal (Rp)</span><input id="rc-nominal" type="number" placeholder="0" style="font-size:22px;font-weight:800;"/></div>
+    <div class="field"><span class="label">Kategori</span>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:200px;overflow-y:auto;" id="rc-cats">
+        ${cats.map(c=>`<button class="cat-btn ${c.id===cat?'active':''}" style="${c.id===cat?`border-color:${c.color};background:${c.color}22;`:''}" onclick="selectRecurringCat(this,'${c.id}','${c.color}')"><span style="font-size:18px;">${c.icon}</span><span style="font-size:9px;font-weight:600;color:${c.id===cat?c.color:'var(--slate5)'};text-align:center;">${esc(c.label.split(' ')[0])}</span></button>`).join("")}
+      </div>
+    </div>
+    <div class="field"><span class="label">Dompet / Rekening</span><select id="rc-wallet">${wallets.map(w=>`<option value="${w.id}">${w.icon} ${esc(w.name)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Keterangan</span><input id="rc-ket" placeholder="cth: Gaji Pokok, Cicilan Motor"/></div>
+    <div class="field"><span class="label">Tanggal Setiap Bulan</span><input id="rc-day" type="number" min="1" max="28" placeholder="1" value="1"/>
+      <p style="font-size:11px;color:var(--slate5);margin-top:4px;">Gunakan 1-28 agar valid di semua bulan</p>
+    </div>
+    <input type="hidden" id="rc-cat-selected" value="${cat||''}"/>
+    <button class="btn" style="background:${type==='expense'?'linear-gradient(135deg,var(--rose),#BE123C)':'linear-gradient(135deg,var(--green),#16A34A)'};color:${type==='expense'?'#fff':'var(--bg)'};" onclick="submitRecurring('${type}')">Simpan</button>
+  `);
+}
+function selectRecurringCat(btn,id,color){
+  document.querySelectorAll('#rc-cats .cat-btn').forEach(b=>{b.style.borderColor='var(--border)';b.style.background='var(--card)';b.querySelector('span:last-child').style.color='var(--slate5)';});
+  btn.style.borderColor=color; btn.style.background=color+'22'; btn.querySelector('span:last-child').style.color=color;
+  document.getElementById('rc-cat-selected').value=id;
+}
+function submitRecurring(type){
+  const nominal = parseInt(document.getElementById("rc-nominal").value);
+  const category = document.getElementById("rc-cat-selected").value;
+  const walletId = document.getElementById("rc-wallet").value;
+  const keterangan = document.getElementById("rc-ket").value.trim();
+  let dayOfMonth = parseInt(document.getElementById("rc-day").value);
+  if(!nominal || !walletId || !keterangan){ showToast("Lengkapi semua field","error"); return; }
+  if(!dayOfMonth || dayOfMonth<1) dayOfMonth=1;
+  if(dayOfMonth>28) dayOfMonth=28;
+  call("addRecurringTx", STATE.token, {type,category,walletId,nominal,keterangan,dayOfMonth})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Transaksi rutin ditambahkan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+function toggleRecurringFn(id, active){
+  call("toggleRecurringTx", STATE.token, id, active).then(d=>{STATE=d; renderApp();});
+}
+function deleteRecurringFn(id){
+  call("deleteRecurringTx", STATE.token, id).then(d=>{STATE=d; renderApp(); showToast("Transaksi rutin dihapus","info");}).catch(e=>showToast(e.message,"error"));
+}
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js"));
+}
+</script>
+</body>
+</html>
