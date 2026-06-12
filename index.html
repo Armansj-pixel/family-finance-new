@@ -96,7 +96,7 @@ function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
 function openModal(html){ document.getElementById("modal-root").innerHTML =
   '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>'; }
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxCpbsMQCg44UiCmYO_1YSagHBMLqOM6SCZt07WFwdlfMTX54uroVI1ZmsLsS_Ug7Ha/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzp8Xu1-g8MGrYmaPwdkxkGXJRicMvf0qNdRk0tnZ2V6pIDEXZ1Il5cQx9zByeML6iN/exec";
 
 function call(fnName, ...args){
   return fetch(API_URL, {
