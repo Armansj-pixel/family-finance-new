@@ -343,6 +343,52 @@ function txRowHTML(tx){
 }
 
 // ============================================================
+// PENDING APPROVAL BANNER
+// ============================================================
+function renderPendingBanner(){
+  const pending = STATE.pending || [];
+  if(!pending.length) return "";
+  let html = `<div class="card" style="border-color:rgba(245,158,11,.35);margin-bottom:14px;">
+    <p style="color:var(--gold);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:10px;">⏳ Menunggu Persetujuan</p>`;
+  pending.forEach(p=>{
+    const cat = catById(p.category);
+    const wallet = walletById(p.walletId);
+    const author = userById(p.userId);
+    const isMine = p.userId === STATE.user.id;
+    const isIncome = p.type==="income";
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div class="icon-circle" style="background:${cat.color}22;">${cat.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${esc(p.keterangan)}</p>
+        <p style="font-size:10px;color:var(--slate5);">${p.date} · ${wallet?wallet.icon+' '+esc(wallet.name):''} · diajukan ${author?author.avatar+' '+esc(author.name):''}</p>
+      </div>
+      <div style="text-align:right;">
+        <p style="font-size:13px;font-weight:700;color:${isIncome?'var(--green)':'var(--rose)'};margin-bottom:4px;">${isIncome?'+':'-'}${fmtK(p.nominal)}</p>
+        ${isMine
+          ? `<button onclick="rejectPendingFn('${p.id}')" style="font-size:10px;background:none;border:1px solid var(--border);color:var(--slate3);border-radius:8px;padding:3px 8px;">Batalkan</button>`
+          : `<div style="display:flex;gap:6px;justify-content:flex-end;">
+               <button onclick="approvePendingFn('${p.id}')" style="font-size:10px;background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:8px;padding:3px 8px;font-weight:700;">Setujui</button>
+               <button onclick="rejectPendingFn('${p.id}')" style="font-size:10px;background:none;border:1px solid var(--border);color:var(--slate3);border-radius:8px;padding:3px 8px;">Tolak</button>
+             </div>`
+        }
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+function approvePendingFn(id){
+  call("approvePendingTx", STATE.token, id)
+    .then(d=>{STATE=d; renderApp(); showToast("Transaksi disetujui ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+function rejectPendingFn(id){
+  call("rejectPendingTx", STATE.token, id)
+    .then(d=>{STATE=d; renderApp(); showToast("Transaksi dibatalkan","info");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+// ============================================================
 // DASHBOARD TAB
 // ============================================================
 function renderDashboard(){
@@ -366,6 +412,7 @@ function renderDashboard(){
       <p style="color:var(--slate3);font-size:12px;margin-bottom:2px;">Selamat datang 💰</p>
       <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;">${u.avatar} ${esc(u.name)}</h2>
     </div>
+    ${renderPendingBanner()}
 
     <div style="background:linear-gradient(135deg,#0D2137,#0E1420);border:1px solid rgba(45,212,191,.2);border-radius:22px;padding:20px 18px;margin-bottom:14px;">
       <p style="color:var(--slate3);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Total Aset Keluarga</p>
@@ -796,6 +843,42 @@ function renderSettings(){
       <p style="color:var(--slate5);font-size:11px;margin-top:10px;">Transaksi rutin otomatis tercatat saat tanggal yang ditentukan tiba (dicek setiap kali app dibuka).</p>
     </div>
 
+    <div class="card" style="margin-bottom:14px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">🤝 Persetujuan Transaksi Besar</p>
+      <p style="color:var(--slate5);font-size:12px;margin-bottom:10px;">Transaksi dengan nominal di atas batas ini akan menunggu persetujuan anggota lain sebelum tercatat. Isi 0 untuk menonaktifkan.</p>
+      <div style="display:flex;gap:8px;">
+        <input id="approval-threshold" type="number" value="${STATE.approvalThreshold}" placeholder="1000000" style="flex:1;"/>
+        <button onclick="saveThreshold()" class="btn btn-primary" style="width:auto;padding:10px 18px;">Simpan</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">💸 Utang-Piutang Keluarga</p>
+        <button onclick="openAddDebtModal()" style="background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">${ICO.plus}Tambah</button>
+      </div>
+      ${renderDebtSummary()}
+      ${(STATE.debts||[]).length===0?`<p style="color:var(--slate5);font-size:13px;text-align:center;padding:8px 0;">Belum ada catatan utang-piutang.</p>`:
+        (STATE.debts||[]).map(d=>{
+          const from = userById(d.fromUserId), to = userById(d.toUserId);
+          const canDelete = d.fromUserId===STATE.user.id && !d.settled;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);opacity:${d.settled?'.5':'1'};">
+            <div class="icon-circle" style="background:${d.settled?'var(--green)22':'var(--rose)22'};">${d.settled?'✅':'💸'}</div>
+            <div style="flex:1;min-width:0;">
+              <p style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">${from?from.avatar:'?'} → ${to?to.avatar:'?'} · ${esc(d.keterangan||'Tanpa keterangan')}</p>
+              <p style="font-size:10px;color:var(--slate5);">${d.date} ${d.settled?'· Lunas':''}</p>
+            </div>
+            <div style="text-align:right;">
+              <p style="font-size:13px;font-weight:700;color:${d.settled?'var(--slate5)':'var(--rose)'};margin-bottom:4px;">${fmtK(d.nominal)}</p>
+              <div style="display:flex;gap:6px;justify-content:flex-end;">
+                ${!d.settled?`<button onclick="settleDebtFn('${d.id}')" style="font-size:10px;background:var(--tealDim);border:1px solid var(--teal);color:var(--teal);border-radius:8px;padding:3px 8px;font-weight:700;">Lunas</button>`:''}
+                ${canDelete?`<button onclick="deleteDebtFn('${d.id}')" style="background:none;border:none;color:var(--slate5);cursor:pointer;padding:0;">${ICO.trash}</button>`:''}
+              </div>
+            </div>
+          </div>`;
+        }).join("")}
+    </div>
+
     <div class="card" style="border:1px dashed var(--border);">
       <p style="color:#22D3EE;font-size:11px;font-weight:700;margin-bottom:6px;">📊 Database: Google Sheets</p>
       <p style="color:var(--slate5);font-size:12px;line-height:1.6;">Semua data tersimpan di Google Spreadsheet milik kamu. Buka Apps Script project untuk melihat / backup data secara langsung.</p>
@@ -878,7 +961,10 @@ function submitTx(type){
   const btn = document.getElementById("tx-submit-btn");
   btn.textContent = "Menyimpan..."; btn.disabled = true;
   call("addTransaction", STATE.token, payload)
-    .then(d=>{STATE=d; pendingReceipt=null; closeModal(); renderApp(); showToast("Transaksi disimpan ✓");})
+    .then(d=>{STATE=d; pendingReceipt=null; closeModal(); renderApp();
+      if(d._pendingCreated) showToast("Nominal besar — menunggu persetujuan pasangan ⏳","info");
+      else showToast("Transaksi disimpan ✓");
+    })
     .catch(e=>{showToast(e.message,"error"); btn.textContent="Simpan"; btn.disabled=false;});
 }
 
@@ -1076,6 +1162,72 @@ function toggleRecurringFn(id, active){
 }
 function deleteRecurringFn(id){
   call("deleteRecurringTx", STATE.token, id).then(d=>{STATE=d; renderApp(); showToast("Transaksi rutin dihapus","info");}).catch(e=>showToast(e.message,"error"));
+}
+
+// ============================================================
+// APPROVAL THRESHOLD
+// ============================================================
+function saveThreshold(){
+  const val = parseInt(document.getElementById("approval-threshold").value)||0;
+  call("setApprovalThreshold", STATE.token, val)
+    .then(d=>{STATE=d; renderApp(); showToast(val>0?`Persetujuan diaktifkan untuk transaksi ≥ ${fmt(val)}`:"Persetujuan dinonaktifkan","success");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+// ============================================================
+// DEBTS (UTANG-PIUTANG)
+// ============================================================
+function renderDebtSummary(){
+  const debts = (STATE.debts||[]).filter(d=>!d.settled);
+  if(!debts.length) return "";
+  // net balance per user pair: positive = "toUser" owes "fromUser"... simplify to net per user vs me
+  const net = {}; // userId -> net amount they owe ME (positive) or I owe them (negative)
+  debts.forEach(d=>{
+    if(d.fromUserId===STATE.user.id) net[d.toUserId]=(net[d.toUserId]||0)+Number(d.nominal);
+    else if(d.toUserId===STATE.user.id) net[d.fromUserId]=(net[d.fromUserId]||0)-Number(d.nominal);
+  });
+  const entries = Object.entries(net).filter(([,v])=>v!==0);
+  if(!entries.length) return "";
+  return `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">
+    ${entries.map(([uid,v])=>{
+      const other = userById(uid);
+      const positive = v>0;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;background:${positive?'rgba(74,222,128,.08)':'rgba(251,113,133,.08)'};border:1px solid ${positive?'rgba(74,222,128,.2)':'rgba(251,113,133,.2)'};border-radius:12px;padding:10px 12px;">
+        <span style="font-size:12px;">${other?other.avatar+' '+esc(other.name):'?'} ${positive?'berutang ke kamu':'kamu berutang'}</span>
+        <span style="font-size:13px;font-weight:800;color:${positive?'var(--green)':'var(--rose)'};">${fmtK(Math.abs(v))}</span>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function openAddDebtModal(){
+  const others = STATE.familyUsers.filter(u=>u.id!==STATE.user.id);
+  if(!others.length){ showToast("Belum ada anggota keluarga lain","info"); return; }
+  openModal(`
+    <div class="modal-header"><span style="font-weight:700;font-size:16px;">Catat Utang-Piutang</span><button class="closebtn" onclick="closeModal()">${ICO.close}</button></div>
+    <p style="color:var(--slate5);font-size:12px;margin-bottom:14px;">Catat siapa yang meminjam ke siapa. "Ke" akan tercatat sebagai pihak yang berutang ke kamu.</p>
+    <div class="field"><span class="label">Berutang Kepadaku</span><select id="dt-to">${others.map(u=>`<option value="${u.id}">${u.avatar} ${esc(u.name)}</option>`).join("")}</select></div>
+    <div class="field"><span class="label">Nominal (Rp)</span><input id="dt-nominal" type="number" placeholder="0" style="font-size:20px;font-weight:800;"/></div>
+    <div class="field"><span class="label">Keterangan</span><input id="dt-ket" placeholder="cth: Pinjam untuk bensin"/></div>
+    <div class="field"><span class="label">Tanggal</span><input id="dt-date" type="date" value="${todayStr()}"/></div>
+    <button class="btn btn-primary" onclick="submitDebt()">Simpan</button>
+  `);
+}
+function submitDebt(){
+  const toUserId = document.getElementById("dt-to").value;
+  const nominal = parseInt(document.getElementById("dt-nominal").value);
+  const keterangan = document.getElementById("dt-ket").value.trim();
+  const date = document.getElementById("dt-date").value;
+  if(!nominal){ showToast("Isi nominal","error"); return; }
+  call("addDebt", STATE.token, {toUserId, nominal, keterangan, date})
+    .then(d=>{STATE=d; closeModal(); renderApp(); showToast("Catatan disimpan ✓");})
+    .catch(e=>showToast(e.message,"error"));
+}
+function settleDebtFn(id){
+  call("settleDebt", STATE.token, id).then(d=>{STATE=d; renderApp(); showToast("Ditandai lunas ✓");}).catch(e=>showToast(e.message,"error"));
+}
+function deleteDebtFn(id){
+  call("deleteDebt", STATE.token, id).then(d=>{STATE=d; renderApp(); showToast("Catatan dihapus","info");}).catch(e=>showToast(e.message,"error"));
 }
 </script>
 <script>
