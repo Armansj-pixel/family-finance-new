@@ -176,7 +176,7 @@ function renderAuthForm(){
         <div style="display:flex;gap:8px;">
           <button type="button" class="role-btn active" data-role="Suami" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--teal);background:var(--tealDim);color:var(--teal);font-weight:600;font-size:12px;">👨 Suami</button>
           <button type="button" class="role-btn" data-role="Istri" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👩 Istri</button>
-          <button type="button" class="role-btn" data-role="Anggota" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">👤 Anggota</button>
+          <button type="button" class="role-btn" data-role="Anak" onclick="selectRole(this)" style="flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--slate3);font-weight:600;font-size:12px;">🧒 Anak</button>
         </div>
       </div>
       <div class="field"><span class="label">Email</span><input id="re-email" type="email" placeholder="email@kamu.com"/></div>
@@ -461,6 +461,22 @@ function renderDashboard(){
     html += `</div>`;
   }
 
+  // Allowance (Anak) transparency
+  const kids = STATE.familyUsers.filter(fu=>fu.role==="Anak" && fu.allowanceLimit>0);
+  if(kids.length){
+    html += `<div class="card" style="margin-bottom:14px;"><p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">🧒 Limit Jajan Anak</p>`;
+    kids.forEach(kid=>{
+      const used = myTx.filter(t=>t.type==="expense"&&t.category==="hiburan"&&t.userId===kid.id).reduce((a,t)=>a+Number(t.nominal),0);
+      const p = pct(used, kid.allowanceLimit);
+      const col = p>=100?'var(--rose)':p>=75?'var(--gold)':'var(--teal)';
+      html += `<div style="margin-bottom:11px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:12px;">${kid.avatar} ${esc(kid.name)}</span><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;color:var(--slate5);">${fmtK(used)}/${fmtK(kid.allowanceLimit)}</span><span style="font-size:11px;color:${col};font-weight:700;">${p}%</span></div></div>
+        <div class="bar"><div class="bar-fill" style="width:${Math.min(p,100)}%;background:${col};"></div></div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
   // Targets mini
   STATE.targets.slice(0,2).forEach(g=>{
     const p = pct(g.saved,g.target);
@@ -712,6 +728,8 @@ function renderAnalyzer(){
       ${[["month","Bulan Ini"],["3month","3 Bulan"],["6month","6 Bulan"]].map(([p,l])=>`<button class="tabbtn ${analyzerPeriod===p?'active':''}" style="${analyzerPeriod===p?'background:rgba(167,139,250,.2);color:var(--violet);':''}" onclick="analyzerPeriod='${p}';renderApp()">${l}</button>`).join("")}
     </div>
 
+    ${renderMonthlySummary(monthly, catBreak, totalExp, totalInc, leakage, totalLeak)}
+
     <div class="card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;">Tren Keuangan</p>
@@ -769,6 +787,51 @@ function renderAnalyzer(){
     </div>
   </div>`;
   return html;
+}
+
+// ============================================================
+// MONTHLY NARRATIVE SUMMARY
+// ============================================================
+function renderMonthlySummary(monthly, catBreak, totalExp, totalInc, leakage, totalLeak){
+  const last = monthly[monthly.length-1];
+  if(!last) return "";
+  const cashflow = last.cashflow;
+  const sentences = [];
+
+  if(totalInc===1 && totalExp===1){
+    sentences.push("Belum ada transaksi tercatat bulan ini.");
+  } else {
+    if(cashflow>0) sentences.push(`Bulan ini keuangan keluarga <b style="color:var(--green);">surplus ${fmt(cashflow)}</b> — pemasukan lebih besar dari pengeluaran. 👍`);
+    else if(cashflow<0) sentences.push(`Bulan ini pengeluaran <b style="color:var(--rose);">lebih besar ${fmt(Math.abs(cashflow))}</b> dari pemasukan — perlu sedikit direm.`);
+    else sentences.push("Pemasukan dan pengeluaran bulan ini seimbang.");
+
+    if(catBreak.length){
+      const top = catBreak[0];
+      sentences.push(`Pengeluaran terbesar ada di kategori <b>${top.cat.icon} ${esc(top.cat.label)}</b>, yaitu ${top.p}% dari total (${fmt(top.val)}).`);
+    }
+
+    if(leakage.length>=3){
+      sentences.push(`Terdeteksi <b style="color:var(--gold);">${leakage.length} transaksi kecil</b> (&lt;Rp50rb) senilai total ${fmt(totalLeak)} — coba dikurangi bulan depan untuk hemat lebih banyak.`);
+    } else if(leakage.length>0){
+      sentences.push(`Ada ${leakage.length} transaksi kecil senilai ${fmt(totalLeak)} — masih terkendali.`);
+    } else {
+      sentences.push(`Tidak ada kebocoran kecil terdeteksi — pengeluaran cukup terkontrol. 🎉`);
+    }
+
+    if(monthly.length>=2){
+      const prev = monthly[monthly.length-2];
+      if(prev.expense>0){
+        const diff = Math.round(((last.expense-prev.expense)/prev.expense)*100);
+        if(diff>10) sentences.push(`Pengeluaran naik <b style="color:var(--rose);">${diff}%</b> dibanding bulan sebelumnya.`);
+        else if(diff<-10) sentences.push(`Pengeluaran turun <b style="color:var(--green);">${Math.abs(diff)}%</b> dibanding bulan sebelumnya — kerja bagus!`);
+      }
+    }
+  }
+
+  return `<div class="card" style="margin-bottom:12px;border-color:rgba(45,212,191,.2);background:linear-gradient(135deg,rgba(45,212,191,.06),transparent);">
+    <p style="color:var(--teal);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:8px;">📝 Ringkasan Bulan Ini</p>
+    <p style="font-size:13px;line-height:1.8;color:var(--white);">${sentences.join(" ")}</p>
+  </div>`;
 }
 
 // ============================================================
@@ -842,6 +905,15 @@ function renderSettings(){
         }).join("")}
       <p style="color:var(--slate5);font-size:11px;margin-top:10px;">Transaksi rutin otomatis tercatat saat tanggal yang ditentukan tiba (dicek setiap kali app dibuka).</p>
     </div>
+
+    ${u.role==="Anak"?`<div class="card" style="margin-bottom:14px;">
+      <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">🧒 Limit Jajan Bulanan</p>
+      <p style="color:var(--slate5);font-size:12px;margin-bottom:10px;">Atur batas pengeluaran kategori "Hiburan & Jajan" per bulan. Orang tua bisa lihat progresnya di Dasbor.</p>
+      <div style="display:flex;gap:8px;">
+        <input id="allowance-limit" type="number" value="${u.allowanceLimit||0}" placeholder="0 = tanpa limit"/>
+        <button onclick="saveAllowance()" class="btn btn-primary" style="width:auto;padding:10px 18px;">Simpan</button>
+      </div>
+    </div>`:""}
 
     <div class="card" style="margin-bottom:14px;">
       <p style="color:var(--slate3);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px;">🤝 Persetujuan Transaksi Besar</p>
@@ -1171,6 +1243,13 @@ function saveThreshold(){
   const val = parseInt(document.getElementById("approval-threshold").value)||0;
   call("setApprovalThreshold", STATE.token, val)
     .then(d=>{STATE=d; renderApp(); showToast(val>0?`Persetujuan diaktifkan untuk transaksi ≥ ${fmt(val)}`:"Persetujuan dinonaktifkan","success");})
+    .catch(e=>showToast(e.message,"error"));
+}
+
+function saveAllowance(){
+  const val = parseInt(document.getElementById("allowance-limit").value)||0;
+  call("setAllowanceLimit", STATE.token, val)
+    .then(d=>{STATE=d; renderApp(); showToast(val>0?`Limit jajan disimpan: ${fmt(val)}/bulan`:"Limit jajan dihapus","success");})
     .catch(e=>showToast(e.message,"error"));
 }
 
